@@ -28,8 +28,9 @@ from ipywidgets import interact, widgets
 from IPython.display import display, Markdown, HTML
 from IPython.display import clear_output
 
-from Task0SimilarityScoreUtils import *
-from Task0DisplayUtils import *
+from SimilarityScoreUtils import *
+from Utilities.DisplayUtils import *
+import streamlit as st
 
 
 dataset_mean_values = [0, 0, 0]

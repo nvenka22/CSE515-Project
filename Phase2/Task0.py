@@ -30,10 +30,10 @@ from IPython.display import clear_output
 
 import streamlit as st
 
-from Task0Utility import *
-from Task0DisplayUtils import *
-from Task0SimilarityScoreUtils import *
-from MongoDBUtils import *
+from Utilities.DisplayUtils import *
+from FeatureDescriptors.FeatureDescriptorUtils import *
+from FeatureDescriptors.SimilarityScoreUtils import *
+from MongoDB.MongoDBUtils import *
 
 #utils=Task0Utility()
 
@@ -86,8 +86,3 @@ if idx!=None:
     
     with col3:
         st.write("")
-
-
-
-
-

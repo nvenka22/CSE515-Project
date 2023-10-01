@@ -30,7 +30,8 @@ from ipywidgets import interact, widgets
 from IPython.display import display, Markdown, HTML
 from IPython.display import clear_output
 
-from Task0Utility import *
+from Utilities.DisplayUtils import *
+from FeatureDescriptors.FeatureDescriptorUtils import *
 
 
 #Connect to Database and retrieve collection
@@ -43,7 +44,7 @@ def connect_to_db(collectionName):
     print('collection is '+str(collection))
     return collection
 
-def push_dataset_to_mongodb(dataset):
+def push_dataset_to_mongodb(dataset,collection):
     for idx in tqdm(range(len(dataset))):
         image = cv2.cvtColor(np.array(dataset.__getitem__(index = idx)[0]),cv2.COLOR_RGB2BGR)
         descriptors = descriptor_calculator(image, idx)
