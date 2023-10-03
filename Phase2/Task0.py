@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Sep 29 19:22:18 2023
-
-@author: nikhilvr
-"""
-
 import os
 import cv2
 from torchvision.models import resnet50
@@ -24,9 +16,7 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
-from ipywidgets import interact, widgets
-from IPython.display import display, Markdown, HTML
-from IPython.display import clear_output
+from pathlib import Path
 
 import streamlit as st
 
@@ -35,12 +25,10 @@ from FeatureDescriptors.FeatureDescriptorUtils import *
 from FeatureDescriptors.SimilarityScoreUtils import *
 from MongoDB.MongoDBUtils import *
 
-#utils=Task0Utility()
+mod_path = Path(__file__).parent.parent
 
-caltech101 = Caltech101("~/CSE 515 - Multimedia Web Databases/",download=True)
-collection = connect_to_db('image_features')
-
-#print(caltech101.__getitem__(index = 0)[0] ) #max index 8676
+caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
+collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase1','image_features')
 
 dataset_mean_values = [0, 0, 0]
 dataset_std_dev_values = [0, 0, 0]
@@ -63,26 +51,14 @@ dataset_std_dev_values = [val / dataset_size for val in dataset_std_dev_values]
 # print(f'Mean values: {dataset_mean_values}')
 # print(f'Standard deviation values: {dataset_std_dev_values}')
 
-#Calculate required feature space vectors for each image
-#push_dataset_to_mongodb(dataset = caltech101)
-
 idx = st.number_input('Enter ImageID',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
 
-document = collection.find_one({'_id': idx})
-image = np.array(document['image'], dtype=np.uint8)
-
-if idx!=None:
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.write("")
-    
-    with col2:
-        st.write("Query Image:")
-        st.image(image=image, caption="ImageID: "+str(idx),channels="BGR", width = 300)
-        queryksimilar(idx, 5,collection,caltech101)
-        
-        
-    
-    with col3:
-        st.write("")
+if st.button("Run", type="primary"):
+    document = collection.find_one({'_id': idx})
+    print(document['_id'])
+    image = np.array(document['image'], dtype=np.uint8)
+    st.write("Query Image:")
+    st.image(image=image, caption="ImageID: "+str(idx),channels="BGR", width = 300)
+    queryksimilar(idx, 5,collection,caltech101)
+else:
+    st.write("")

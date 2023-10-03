@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Sep 29 20:15:21 2023
-
-@author: nikhilvr
-"""
-
 import pymongo
 from pymongo import MongoClient
 import os
@@ -26,9 +18,6 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
-from ipywidgets import interact, widgets
-from IPython.display import display, Markdown, HTML
-from IPython.display import clear_output
 
 from Utilities.DisplayUtils import *
 from FeatureDescriptors.FeatureDescriptorUtils import *
@@ -36,10 +25,10 @@ from FeatureDescriptors.FeatureDescriptorUtils import *
 
 #Connect to Database and retrieve collection
 
-def connect_to_db(collectionName):
+def connect_to_db(dbname, collectionName):
     print('In connect to DB')
     client = MongoClient('localhost',27017)
-    db = client['CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase1']
+    db = client[dbname]
     collection = db[collectionName]
     print('collection is '+str(collection))
     return collection

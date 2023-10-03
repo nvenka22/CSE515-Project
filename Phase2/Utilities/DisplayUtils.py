@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Sep 29 19:38:48 2023
-
-@author: nikhilvr
-"""
 import os
 import cv2
 from torchvision.models import resnet50
@@ -23,9 +16,6 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
-from ipywidgets import interact, widgets
-from IPython.display import display, Markdown, HTML
-from IPython.display import clear_output
 
 def to_base64(image):
     from io import BytesIO
