@@ -234,17 +234,12 @@ def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_c
     
     image = np.array(imagedata['image'], dtype=np.uint8)
     st.markdown("Query Image")
-    display_image_centered(np.array(image),index)
-    st.markdown("Query Image Color Moments")
+    display_image_centered(np.array(image),str(index))
     display_color_moments(np.array(imagedata['color_moments']))
-    st.markdown("Query Image HOG Descriptor")
     display_hog(imagedata['hog_descriptor'])
-    st.markdown("Query Image Avgpool Descriptor")
-    display_feature_vector(imagedata['avgpool_descriptor'])
-    st.markdown("Query Image Layer3 Descriptor")
-    display_feature_vector(imagedata['layer3_descriptor'])
-    st.markdown("Query Image FC Descriptor")
-    display_feature_vector(imagedata['fc_descriptor'])
+    display_feature_vector(imagedata['avgpool_descriptor'],"Query Image Avgpool Descriptor")
+    display_feature_vector(imagedata['layer3_descriptor'],"Query Image Layer3 Descriptor")
+    display_feature_vector(imagedata['fc_descriptor'],"Query Image FC Descriptor")
     st.markdown('Color Moments - Euclidean Distance')
     show_ksimilar(color_moments_similar,feature_collection)
     st.markdown('Histograms of Oriented Gradients(HOG) - Cosine Similarity')
@@ -256,6 +251,47 @@ def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_c
     st.markdown('ResNet-FC-1000 - Cosine Similarity')
     show_ksimilar(fc_similar,feature_collection)
     return similarity_scores
+
+def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,similarity_collection,dataset):
+
+    color_moments = color_moments_calculator(image)
+    hog_descriptor = hog_calculator(image)
+    avgpool_descriptor = avgpool_calculator(image)
+    layer3_descriptor = layer3_calculator(image)
+    fc_descriptor = fc_calculator(image)
+
+    imagedata = {
+        'image': image.tolist() if isinstance(image, np.ndarray) else image,  # Convert the image to a list for storage
+        'color_moments': color_moments.tolist() if isinstance(color_moments, np.ndarray) else color_moments,
+        'hog_descriptor': hog_descriptor.tolist() if isinstance(hog_descriptor, np.ndarray) else hog_descriptor,
+        'avgpool_descriptor': avgpool_descriptor.tolist() if isinstance(avgpool_descriptor, np.ndarray) else avgpool_descriptor,
+        'layer3_descriptor': layer3_descriptor.tolist() if isinstance(layer3_descriptor, np.ndarray) else layer3_descriptor,
+        'fc_descriptor': fc_descriptor.tolist()
+    }
+    similarity_scores = similarity_calculator_newimg(imagedata,odd_feature_collection,feature_collection,similarity_collection,dataset)
+    color_moments_similar = dict(sorted(similarity_scores["color_moments"].items(), key = lambda x: x[1])[:k])
+    hog_similar = dict(sorted(similarity_scores["hog_descriptor"].items(), key = lambda x: x[1])[-k:])
+    avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1])[-k:])
+    layer3_similar = dict(sorted(similarity_scores["layer3_descriptor"].items(), key = lambda x: x[1])[:k])
+    fc_similar = dict(sorted(similarity_scores["fc_descriptor"].items(), key = lambda x: x[1])[-k:])
+
+    display_color_moments(np.array(imagedata['color_moments']))
+    display_hog(imagedata['hog_descriptor'])
+    display_feature_vector(imagedata['avgpool_descriptor'],"Query Image Avgpool Descriptor")
+    display_feature_vector(imagedata['layer3_descriptor'],"Query Image Layer3 Descriptor")
+    display_feature_vector(imagedata['fc_descriptor'],"Query Image FC Descriptor")
+    st.markdown('Color Moments - Euclidean Distance')
+    show_ksimilar(color_moments_similar,feature_collection)
+    st.markdown('Histograms of Oriented Gradients(HOG) - Cosine Similarity')
+    show_ksimilar(hog_similar,feature_collection)
+    st.markdown('ResNet-AvgPool-1024 - Cosine Similarity')
+    show_ksimilar(avgpool_similar,feature_collection)
+    st.markdown('ResNet-Layer3-1024 - Euclidean Distance')
+    show_ksimilar(layer3_similar,feature_collection)
+    st.markdown('ResNet-FC-1000 - Cosine Similarity')
+    show_ksimilar(fc_similar,feature_collection)
+    return similarity_scores
+
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]

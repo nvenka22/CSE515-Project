@@ -30,106 +30,82 @@ def to_base64(image):
     return base64.b64encode(buffered.getvalue()).decode()
 
 def display_image_centered(image,idx):
-    st.image(image=image, caption="ImageID: "+str(idx),channels="BGR", width = 300)
+    left_co, cent_co,last_co = st.columns(3)
+    with cent_co:
+            st.image(image=image, caption="ImageID: "+idx,channels="BGR", width = 300)
     
-def display_feature_vector(vector):
-    """
-    plt.figure(figsize=(10,5))
-    plt.bar(range(len(vector)), vector)
-    plt.title('Feature Vector Visualization')
-    plt.xlabel('Dimension')
-    plt.ylabel('Value')
-    plt.show()"""
-    st.write(vector)
+def display_feature_vector(vector, heading):
+
+    with st.expander(heading):
+        st.write(vector)
     
 def display_color_moments(color_moments):
     
-    """# Display a total of 100 subplots
-    
-    fig, axs = plt.subplots(10, 10, figsize=(30, 30))
-    plt.subplots_adjust(wspace=0.5, hspace=0.5)
-    
-    custom_handles = [Line2D([0], [0], color='w', label='M - (Mean)', markerfacecolor='red', markersize=1),
-                      Line2D([0], [0], color='w', label='St - (Std Dev)', markerfacecolor='green', markersize=1),
-                      Line2D([0], [0], color='w', label='(Sk - Skewness)', markerfacecolor='blue', markersize=1)]
-
-    for row in range(10):
-        for col in range(10):
-            moments = color_moments[row, col]
-            ax = axs[row, col]
-
-            positions = np.array([1, 2, 3])  # Adjust the positions of the groups
-
-            # Group 1: Mean (Red, Green, Blue)
-            ax.bar(positions, moments[:, 0], width=1, color=['red', 'green', 'blue'], alpha=0.5, label='M')
-
-            # Group 2: Std Deviation (Red, Green, Blue)
-            ax.bar(positions + 4, moments[:, 1], width=1, color=['red', 'green', 'blue'], alpha=0.5, label='St')
-
-            # Group 3: Skewness (Red, Green, Blue)
-            ax.bar(positions + 8, moments[:, 2], width=1, color=['red', 'green', 'blue'], alpha=0.5, label='Sk')
-
-            ax.set_xticks([2, 6, 10])
-            ax.set_xticklabels(['M', 'St', 'Sk'])
-            ax.set_title(f'Cell ({row+1}, {col+1})')
-
-    # Add legend at top right
-    axs[0, -1].legend(handles=custom_handles, loc='upper right', bbox_to_anchor=(1.1, 1.5), frameon=False)
-
-    plt.show()"""
-
-    st.write(color_moments.tolist())
+    with st.expander("Query Image Color Moments"):
+        st.write(color_moments.tolist())
     
     
     
 def display_hog(hog_descriptor, cell_size=(30, 10)):
-    """# Create a black canvas
-    background = np.zeros((100, 300), dtype=np.uint8)
 
-    for row in range(10):
-        for col in range(10):
-            # Calculate the center of the cell
-            center = (col*cell_size[0] + cell_size[0]//2, row*cell_size[1] + cell_size[1]//2)
-
-            # Calculate the endpoint of the gradient vector based on the HOG descriptor
-            angle = (hog_descriptor[row*10 + col] * 20) - 90
-            length = min(cell_size) // 2
-            endpoint = (int(center[0] + length * np.cos(np.radians(angle))),
-                        int(center[1] + length * np.sin(np.radians(angle))))
-
-            # Draw a line on the canvas
-            cv2.line(background, center, endpoint, 255, 1)
-
-    # Display the visualization using matplotlib
-    plt.imshow(background, cmap='gray')
-    plt.axis('off')
-    plt.show()"""
-    st.write(hog_descriptor)
+    with st.expander("Query Image HOG Descriptor"):
+        st.write(hog_descriptor)
     
     
 def display_images(images, indices, similarity_scores, rows, cols):
     
-    """k = len(images)
+    k = len(images)
 
-    # Create a grid of subplots
-    fig, axes = plt.subplots(rows, cols, figsize=(12, 8))
-    fig.subplots_adjust(wspace=0.3, hspace=0.5)
+    buckets = [[],[],[],[],[]]
 
-    for i, ax in enumerate(axes.flat):
-        if i < k:
-            ax.imshow(images[i], cmap='gray')  # Assuming grayscale images
-            ax.axis('off')
-            ax.set_title(f"Index: {indices[i]}", fontsize=10)
-            ax.text(
-                0.5, -0.15, f"Similarity Score: {similarity_scores[i]:.5f}",
-                transform=ax.transAxes,
-                fontsize=10,
-                ha='center'
-            )
-        else:
-            ax.axis('off')
+    for i in range(0,k,5):
 
-    plt.show()"""
+        if i<k:
+            buckets[0].append([images[i],indices[i],similarity_scores[i]])
+
+        if i+1<k:
+            buckets[1].append([images[i+1],indices[i+1],similarity_scores[i+1]])
+
+        if i+2<k:
+            buckets[2].append([images[i+2],indices[i+2],similarity_scores[i+2]])
+
+        if i+3<k:
+            buckets[3].append([images[i+3],indices[i+3],similarity_scores[i+3]])
+
+        if i+4<k:
+            buckets[4].append([images[i+4],indices[i+4],similarity_scores[i+4]])
+
+
+    with st.container():
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
+
+        with col1:
+
+            for data in buckets[0]:
+                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+
+        with col2:
+
+            for data in buckets[1]:
+                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+
+        with col3:
+
+            for data in buckets[2]:
+                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+
+        with col4:
+
+            for data in buckets[3]:
+                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+
+        with col5:
+
+            for data in buckets[4]:
+                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+
+
 
 def show_ksimilar(k_similar,collection):
     images = []
@@ -139,11 +115,10 @@ def show_ksimilar(k_similar,collection):
     rows = int(count/5)
     if (rows*5)<count: rows+=1
     cols = 5
-    st.write(k_similar)
     for index in k_similar.keys():
         document = collection.find_one({'_id': int(index)})
         images.append(cv2.cvtColor(np.array(document['image'], dtype=np.uint8), cv2.COLOR_BGR2RGB))
         indices.append(int(index))
         similarity_scores.append(k_similar[str(index)])
         
-    #display_images(images, indices, similarity_scores, rows, cols)    
+    display_images(images, indices, similarity_scores, rows, cols)    

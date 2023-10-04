@@ -134,3 +134,33 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
     similarity_collection.update_one({'_id':index},{'$set':similarities},upsert = True)
     
     return similarities
+
+def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
+
+    similarities = {
+            "color_moments": {},
+            "hog_descriptor": {},
+            "avgpool_descriptor": {},
+            "layer3_descriptor": {},
+            "fc_descriptor": {}
+        }
+    
+    for cmpidx in tqdm(range(0,len(dataset),2)):
+        
+        imagedata2 = feature_collection.find_one({"_id": cmpidx})
+
+        color_moments_similarity = similarity_score_color_moments(imagedata1["color_moments"], imagedata2["color_moments"])
+        histogram_similarity = similarity_score_hog(imagedata1["hog_descriptor"], imagedata2["hog_descriptor"])
+        avgpool_similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
+        layer3_similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
+        fc_similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
+        if not np.isnan(color_moments_similarity):
+            similarities["color_moments"][str(cmpidx)] = color_moments_similarity
+        else: 
+            similarities["color_moments"][str(cmpidx)] = 1
+        similarities["hog_descriptor"][str(cmpidx)] =  histogram_similarity
+        similarities["avgpool_descriptor"][str(cmpidx)] =  avgpool_similarity
+        similarities["layer3_descriptor"][str(cmpidx)] = layer3_similarity
+        similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
+    
+    return similarities
