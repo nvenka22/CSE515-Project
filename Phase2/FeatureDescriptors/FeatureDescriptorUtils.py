@@ -226,7 +226,11 @@ def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_c
     avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1])[-k:])
     layer3_similar = dict(sorted(similarity_scores["layer3_descriptor"].items(), key = lambda x: x[1])[:k])
     fc_similar = dict(sorted(similarity_scores["fc_descriptor"].items(), key = lambda x: x[1])[-k:])
-    imagedata = feature_collection.find_one({'_id': index})
+    
+    if index%2==0:
+        imagedata = feature_collection.find_one({'_id': index})
+    else:
+        imagedata = odd_feature_collection.find_one({'_id': index})
     
     image = np.array(imagedata['image'], dtype=np.uint8)
     st.markdown("Query Image")
