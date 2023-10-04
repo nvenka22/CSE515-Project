@@ -11,7 +11,7 @@ from PIL import Image
 import warnings
 warnings.filterwarnings("ignore")
 from scipy.spatial.distance import cosine
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -20,11 +20,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
-
-
-dataset_mean_values = [0, 0, 0]
-dataset_std_dev_values = [0, 0, 0]
-
+from pathlib import Path
 
 def color_moments_calculator(image):
     
@@ -56,42 +52,6 @@ def color_moments_calculator(image):
 
     return color_moments
 
-
-def display_color_moments(color_moments):
-    
-    # Display a total of 100 subplots
-    
-    fig, axs = plt.subplots(10, 10, figsize=(30, 30))
-    plt.subplots_adjust(wspace=0.5, hspace=0.5)
-    
-    custom_handles = [Line2D([0], [0], color='w', label='M - (Mean)', markerfacecolor='red', markersize=1),
-                      Line2D([0], [0], color='w', label='St - (Std Dev)', markerfacecolor='green', markersize=1),
-                      Line2D([0], [0], color='w', label='(Sk - Skewness)', markerfacecolor='blue', markersize=1)]
-
-    for row in range(10):
-        for col in range(10):
-            moments = color_moments[row, col]
-            ax = axs[row, col]
-
-            positions = np.array([1, 2, 3])  # Adjust the positions of the groups
-
-            # Group 1: Mean (Red, Green, Blue)
-            ax.bar(positions, moments[:, 0], width=1, color=['red', 'green', 'blue'], alpha=0.5, label='M')
-
-            # Group 2: Std Deviation (Red, Green, Blue)
-            ax.bar(positions + 4, moments[:, 1], width=1, color=['red', 'green', 'blue'], alpha=0.5, label='St')
-
-            # Group 3: Skewness (Red, Green, Blue)
-            ax.bar(positions + 8, moments[:, 2], width=1, color=['red', 'green', 'blue'], alpha=0.5, label='Sk')
-
-            ax.set_xticks([2, 6, 10])
-            ax.set_xticklabels(['M', 'St', 'Sk'])
-            ax.set_title(f'Cell ({row+1}, {col+1})')
-
-    # Add legend at top right
-    axs[0, -1].legend(handles=custom_handles, loc='upper right', bbox_to_anchor=(1.1, 1.5), frameon=False)
-
-    plt.show()
     
 #HOG Calculations
 
@@ -128,30 +88,6 @@ def hog_calculator(image):
             hog.extend(hist)
 
     return np.array(hog)
-    
-#Display HOG
-def display_hog(hog_descriptor, cell_size=(30, 10)):
-    # Create a black canvas
-    background = np.zeros((100, 300), dtype=np.uint8)
-
-    for row in range(10):
-        for col in range(10):
-            # Calculate the center of the cell
-            center = (col*cell_size[0] + cell_size[0]//2, row*cell_size[1] + cell_size[1]//2)
-
-            # Calculate the endpoint of the gradient vector based on the HOG descriptor
-            angle = (hog_descriptor[row*10 + col] * 20) - 90
-            length = min(cell_size) // 2
-            endpoint = (int(center[0] + length * np.cos(np.radians(angle))),
-                        int(center[1] + length * np.sin(np.radians(angle))))
-
-            # Draw a line on the canvas
-            cv2.line(background, center, endpoint, 255, 1)
-
-    # Display the visualization using matplotlib
-    plt.imshow(background, cmap='gray')
-    plt.axis('off')
-    plt.show()
 
 #ResNet Calculator
 resnet_model = resnet50(pretrained=True)
@@ -265,15 +201,15 @@ def fc_calculator(image):
 
     return tensor_1000
 
-def descriptor_calculator(image, idx):
+def descriptor_calculator(image, idx,caltech101):
     color_moments = color_moments_calculator(image)
     hog_descriptor = hog_calculator(image)
     avgpool_descriptor = avgpool_calculator(image)
     layer3_descriptor = layer3_calculator(image)
     fc_descriptor = fc_calculator(image)
-    #Need to change this to class structure
     return {
         '_id': idx,
+        'label': caltech101.__getitem__(index=idx)[1],
         'image': image.tolist() if isinstance(image, np.ndarray) else image,  # Convert the image to a list for storage
         'color_moments': color_moments.tolist() if isinstance(color_moments, np.ndarray) else color_moments,
         'hog_descriptor': hog_descriptor.tolist() if isinstance(hog_descriptor, np.ndarray) else hog_descriptor,
@@ -282,17 +218,19 @@ def descriptor_calculator(image, idx):
         'fc_descriptor': fc_descriptor.tolist()
     }
     
-def queryksimilar(index,k,collection,dataset):
-    similarity_scores = similarity_calculator(index,collection,dataset)
+def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
+    
+    similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
     color_moments_similar = dict(sorted(similarity_scores["color_moments"].items(), key = lambda x: x[1])[:k])
     hog_similar = dict(sorted(similarity_scores["hog_descriptor"].items(), key = lambda x: x[1])[-k:])
     avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1])[-k:])
     layer3_similar = dict(sorted(similarity_scores["layer3_descriptor"].items(), key = lambda x: x[1])[:k])
     fc_similar = dict(sorted(similarity_scores["fc_descriptor"].items(), key = lambda x: x[1])[-k:])
-    imagedata = collection.find_one({'_id': index})
+    imagedata = feature_collection.find_one({'_id': index})
+    
     image = np.array(imagedata['image'], dtype=np.uint8)
     st.markdown("Query Image")
-    display_image_centered(np.array(image))
+    display_image_centered(np.array(image),index)
     st.markdown("Query Image Color Moments")
     display_color_moments(np.array(imagedata['color_moments']))
     st.markdown("Query Image HOG Descriptor")
@@ -304,13 +242,17 @@ def queryksimilar(index,k,collection,dataset):
     st.markdown("Query Image FC Descriptor")
     display_feature_vector(imagedata['fc_descriptor'])
     st.markdown('Color Moments - Euclidean Distance')
-    show_ksimilar(color_moments_similar,collection)
+    show_ksimilar(color_moments_similar,feature_collection)
     st.markdown('Histograms of Oriented Gradients(HOG) - Cosine Similarity')
-    show_ksimilar(hog_similar,collection)
+    show_ksimilar(hog_similar,feature_collection)
     st.markdown('ResNet-AvgPool-1024 - Cosine Similarity')
-    show_ksimilar(avgpool_similar,collection)
+    show_ksimilar(avgpool_similar,feature_collection)
     st.markdown('ResNet-Layer3-1024 - Euclidean Distance')
-    show_ksimilar(layer3_similar,collection)
+    show_ksimilar(layer3_similar,feature_collection)
     st.markdown('ResNet-FC-1000 - Cosine Similarity')
-    show_ksimilar(fc_similar,collection)
+    show_ksimilar(fc_similar,feature_collection)
     return similarity_scores
+
+dataset_size = 8677
+dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
+dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]

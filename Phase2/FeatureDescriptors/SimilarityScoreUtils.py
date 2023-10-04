@@ -11,11 +11,14 @@ from PIL import Image
 import warnings
 warnings.filterwarnings("ignore")
 from scipy.spatial.distance import cosine
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
+
+import streamlit as st
+from pathlib import Path
 
 #Color Moments
 def featurenormalize(feature_vector):
@@ -90,33 +93,44 @@ def similarity_score_fc(descriptor1, descriptor2):
     # Calculate Cosine Similarity for fc descriptors
     return round(cosine_similarity_calculator([descriptor1], [descriptor2]), 5)
 
-def similarity_calculator(index,collection,dataset):
-    imagedata1 = collection.find_one({'_id': index})
+def similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset):
+
+    similarities = similarity_collection.find_one({'_id': index})
+    if similarities!=None:
+        return similarities
+
+    if index%2 == 0:
+        imagedata1 = feature_collection.find_one({'_id': index})
+    else:
+        imagedata1 = odd_feature_collection.find_one({'_id': index})
+        
     similarities = {
-        "color_moments": {},
-        "hog_descriptor": {},
-        "avgpool_descriptor": {},
-        "layer3_descriptor": {},
-        "fc_descriptor": {}
-    }
+            "_id": index,
+            "color_moments": {},
+            "hog_descriptor": {},
+            "avgpool_descriptor": {},
+            "layer3_descriptor": {},
+            "fc_descriptor": {}
+        }
     
-    for cmpidx in tqdm(range(len(dataset))):
+    for cmpidx in tqdm(range(0,len(dataset),2)):
         
-        imagedata2 = collection.find_one({"_id": cmpidx})
-        
-        # Corrected the use of 'not' instead of '!'
+        imagedata2 = feature_collection.find_one({"_id": cmpidx})
+
         color_moments_similarity = similarity_score_color_moments(imagedata1["color_moments"], imagedata2["color_moments"])
         histogram_similarity = similarity_score_hog(imagedata1["hog_descriptor"], imagedata2["hog_descriptor"])
         avgpool_similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
         layer3_similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
         fc_similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
         if not np.isnan(color_moments_similarity):
-            similarities["color_moments"][cmpidx] = color_moments_similarity
+            similarities["color_moments"][str(cmpidx)] = color_moments_similarity
         else: 
-            similarities["color_moments"][cmpidx] = 1
-        similarities["hog_descriptor"][cmpidx] =  histogram_similarity
-        similarities["avgpool_descriptor"][cmpidx] =  avgpool_similarity
-        similarities["layer3_descriptor"][cmpidx] = layer3_similarity
-        similarities["fc_descriptor"][cmpidx] =  fc_similarity
+            similarities["color_moments"][str(cmpidx)] = 1
+        similarities["hog_descriptor"][str(cmpidx)] =  histogram_similarity
+        similarities["avgpool_descriptor"][str(cmpidx)] =  avgpool_similarity
+        similarities["layer3_descriptor"][str(cmpidx)] = layer3_similarity
+        similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
+    
+    similarity_collection.update_one({'_id':index},{'$set':similarities},upsert = True)
     
     return similarities

@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 from pathlib import Path
+from sys import argv
 
 import streamlit as st
 
@@ -28,15 +29,10 @@ from MongoDB.MongoDBUtils import *
 mod_path = Path(__file__).parent.parent
 
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
-odd_feature_collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_features_odd')
-feature_collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_features')
-similarity_collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_similarities')
 
-idx = st.number_input('Enter ImageID',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
-k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
-
-if st.button("Run", type="primary"):
-    with st.container():    
-        queryksimilar(idx, k,odd_feature_collection,feature_collection,similarity_collection,caltech101)
+if argv[1] == "even":
+	collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_features')
+	push_even_to_mongodb(caltech101,collection)	
 else:
-    st.write("")
+	collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_features_odd')
+	push_odd_to_mongodb(caltech101,collection)
