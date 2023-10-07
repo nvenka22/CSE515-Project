@@ -30,9 +30,11 @@ mod_path = Path(__file__).parent.parent
 
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 
+dbName = 'CSE515-MWD-Kesudh_Giri-ProjectPhase2'
+
 if argv[1] == "even":
-	collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_features')
+	collection = connect_to_db(dbName,'image_features')
 	push_even_to_mongodb(caltech101,collection)	
 else:
-	collection = connect_to_db('CSE515-MWD-Kesudh_Giri-ProjectPhase2','image_features_odd')
+	collection = connect_to_db(dbName,'image_features_odd')
 	push_odd_to_mongodb(caltech101,collection)
