@@ -218,14 +218,14 @@ def descriptor_calculator(image, idx,caltech101):
         'fc_descriptor': fc_descriptor.tolist()
     }
     
-def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
+def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset,feature_space = None):
     
     similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
     color_moments_similar = dict(sorted(similarity_scores["color_moments"].items(), key = lambda x: x[1])[:k])
-    hog_similar = dict(sorted(similarity_scores["hog_descriptor"].items(), key = lambda x: x[1])[-k:])
-    avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1])[-k:])
+    hog_similar = dict(sorted(similarity_scores["hog_descriptor"].items(), key = lambda x: x[1],reverse = True)[:k])
+    avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1],reverse=True)[:k])
     layer3_similar = dict(sorted(similarity_scores["layer3_descriptor"].items(), key = lambda x: x[1])[:k])
-    fc_similar = dict(sorted(similarity_scores["fc_descriptor"].items(), key = lambda x: x[1])[-k:])
+    fc_similar = dict(sorted(similarity_scores["fc_descriptor"].items(), key = lambda x: x[1],reverse=True)[:k])
     
     if index%2==0:
         imagedata = feature_collection.find_one({'_id': index})
@@ -233,23 +233,62 @@ def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_c
         imagedata = odd_feature_collection.find_one({'_id': index})
     
     image = np.array(imagedata['image'], dtype=np.uint8)
-    st.markdown("Query Image")
-    display_image_centered(np.array(image),str(index))
-    display_color_moments(np.array(imagedata['color_moments']))
-    display_hog(imagedata['hog_descriptor'])
-    display_feature_vector(imagedata['avgpool_descriptor'],"Query Image Avgpool Descriptor")
-    display_feature_vector(imagedata['layer3_descriptor'],"Query Image Layer3 Descriptor")
-    display_feature_vector(imagedata['fc_descriptor'],"Query Image FC Descriptor")
-    st.markdown('Color Moments - Euclidean Distance')
-    show_ksimilar(color_moments_similar,feature_collection)
-    st.markdown('Histograms of Oriented Gradients(HOG) - Cosine Similarity')
-    show_ksimilar(hog_similar,feature_collection)
-    st.markdown('ResNet-AvgPool-1024 - Cosine Similarity')
-    show_ksimilar(avgpool_similar,feature_collection)
-    st.markdown('ResNet-Layer3-1024 - Euclidean Distance')
-    show_ksimilar(layer3_similar,feature_collection)
-    st.markdown('ResNet-FC-1000 - Cosine Similarity')
-    show_ksimilar(fc_similar,feature_collection)
+
+    if feature_space == None:
+        st.markdown("Query Image")
+        display_image_centered(np.array(image),str(index))
+        display_color_moments(np.array(imagedata['color_moments']))
+        display_hog(imagedata['hog_descriptor'])
+        display_feature_vector(imagedata['avgpool_descriptor'],"Query Image Avgpool Descriptor")
+        display_feature_vector(imagedata['layer3_descriptor'],"Query Image Layer3 Descriptor")
+        display_feature_vector(imagedata['fc_descriptor'],"Query Image FC Descriptor")
+        st.markdown('Color Moments - Euclidean Distance')
+        show_ksimilar(color_moments_similar,feature_collection,"Distance Score: ")
+        st.markdown('Histograms of Oriented Gradients(HOG) - Cosine Similarity')
+        show_ksimilar(hog_similar,feature_collection,"Similarity Score:")
+        st.markdown('ResNet-AvgPool-1024 - Cosine Similarity')
+        show_ksimilar(avgpool_similar,feature_collection,"Similarity Score:")
+        st.markdown('ResNet-Layer3-1024 - Euclidean Distance')
+        show_ksimilar(layer3_similar,feature_collection, "Distance Score: ")
+        st.markdown('ResNet-FC-1000 - Cosine Similarity')
+        show_ksimilar(fc_similar,feature_collection,"Similarity Score:")
+
+    elif feature_space == "Color Moments":
+        st.markdown("Query Image")
+        display_image_centered(np.array(image),str(index))
+        display_color_moments(np.array(imagedata['color_moments']))
+        st.markdown('Color Moments - Euclidean Distance')
+        show_ksimilar(color_moments_similar,feature_collection,"Distance Score: ")
+
+    elif feature_space == "Histograms of Oriented Gradients(HOG)":
+        st.markdown("Query Image")
+        display_image_centered(np.array(image),str(index))
+        display_hog(imagedata['hog_descriptor'])
+        st.markdown('Histograms of Oriented Gradients(HOG) - Cosine Similarity')
+        show_ksimilar(hog_similar,feature_collection,"Similarity Score:")
+
+    elif feature_space == "ResNet-AvgPool-1024":
+        st.markdown("Query Image")
+        display_image_centered(np.array(image),str(index))
+        display_feature_vector(imagedata['avgpool_descriptor'],"Query Image Avgpool Descriptor")
+        st.markdown('ResNet-AvgPool-1024 - Cosine Similarity')
+        show_ksimilar(avgpool_similar,feature_collection,"Similarity Score:")
+
+    elif feature_space == "ResNet-Layer3-1024":
+        st.markdown("Query Image")
+        display_image_centered(np.array(image),str(index))
+        display_feature_vector(imagedata['layer3_descriptor'],"Query Image Layer3 Descriptor")
+        st.markdown('ResNet-Layer3-1024 - Euclidean Distance')
+        show_ksimilar(layer3_similar,feature_collection, "Distance Score: ")
+
+    elif feature_space == "ResNet-FC-1000":
+        st.markdown("Query Image")
+        display_image_centered(np.array(image),str(index))
+        display_feature_vector(imagedata['fc_descriptor'],"Query Image FC Descriptor")
+        st.markdown('ResNet-FC-1000 - Cosine Similarity')
+        show_ksimilar(fc_similar,feature_collection,"Similarity Score:")
+
+
     return similarity_scores
 
 def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,similarity_collection,dataset):
