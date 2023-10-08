@@ -16,9 +16,15 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
+import statistics
+from sklearn.preprocessing import normalize
+
 
 import streamlit as st
 from pathlib import Path
+
+from Utilities.DisplayUtils import *
+
 
 #Color Moments
 def featurenormalize(feature_vector):
@@ -157,7 +163,11 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
 
     similarities = similarity_collection.find_one({'_id': index})
     if similarities!=None:
+        print("Similarity score present for "+str(index)+" returning from DB")
         return similarities
+
+    print("Similarity score not present for "+str(index)+" calculating and caching to DB")
+
 
     if index%2 == 0:
         imagedata1 = feature_collection.find_one({'_id': index})
@@ -195,6 +205,82 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
     
     return similarities
 
+def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
+    
+    print("Entry similarity_calculator_by_label")
+    image_data_by_label = feature_collection.find({'label':label})
+    final_scores = []
+    
+    required_indices_for_label = []
+    
+    #Segregate images of the label in particular, and calculate similarity scores
+    for doc in image_data_by_label:
+        required_indices_for_label.append(doc['_id'])
+        similarity_calculator(doc['_id'], odd_feature_collection, feature_collection, similarity_collection, dataset)
+        
+        
+    print('The required indices for this label are')
+    print(required_indices_for_label)
+
+    if feature_space == "Color Moments":
+        feature_space = "color_moments"
+
+    elif feature_space == "Histograms of Oriented Gradients(HOG)":
+        feature_space = "hog_descriptor"
+
+    elif feature_space == "ResNet-AvgPool-1024":
+        feature_space = "avgpool_descriptor"
+
+    elif feature_space == "ResNet-Layer3-1024":
+        feature_space = "layer3_descriptor"
+
+    elif feature_space == "ResNet-FC-1000":
+        feature_space = "fc_descriptor"
+        
+    
+   #Extract required scores and calculate average
+    for index in required_indices_for_label:
+        required_scores = []
+        avg_score=0.0
+        image_similarity_scores = similarity_collection.find_one({'_id': index})
+        #print(image_similarity_scores[feature_space].keys())
+        for dct_idx in required_indices_for_label:
+            required_scores.append(image_similarity_scores[feature_space][str(dct_idx)])
+       # print(required_scores)
+        required_scores =[1 if x>1 else x for x in required_scores]
+        print(required_scores)
+        avg_score=statistics.mean(required_scores)
+        imagedata = feature_collection.find_one({'_id': index})
+        final_data={'imageId':imagedata['_id'],'image':cv2.cvtColor(np.array(imagedata['image'], dtype=np.uint8), cv2.COLOR_BGR2RGB),'average_score':avg_score}
+        final_scores.append(final_data)
+    
+    #To test the output stream
+    #st.write(final_scores)
+    
+    #Sort the result dict to retrieve top k results
+    final_scores = sorted(final_scores, key = lambda x: x['average_score'],reverse=True)[:k]
+    
+    #Format final output to call display method
+    
+    display_images_list=[]
+    display_indices=[]
+    display_similarity_scores=[]
+    
+    for score in final_scores:
+        display_images_list.append(score['image'])
+        display_indices.append(score['imageId'])
+        display_similarity_scores.append(score['average_score'])
+        
+    #print("The lengths are :")
+    #print(str(len(display_images_list))+" "+str(len(display_indices))+" "+str(len(display_similarity_scores)))
+    
+    
+        
+    #Call display method for final output
+    
+    display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
+    print("Exit similarity_calculator_by_label")
+           
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
     similarities = {
