@@ -151,13 +151,7 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     image_data_by_label = feature_collection.find({'label':label})
     final_scores = []
     
-  
-    
-   
-    
-    
     required_indices_for_label = []
-    
     
     #Segregate images of the label in particular, and calculate similarity scores
     for doc in image_data_by_label:
