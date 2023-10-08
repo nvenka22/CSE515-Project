@@ -147,7 +147,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
 def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
     
     print("Entry similarity_calculator_by_label")
-    image_data_by_label = feature_collection.find({'label':4})
+    image_data_by_label = feature_collection.find({'label':label})
     
     final_scores = []
     
@@ -164,6 +164,21 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         
     print('The required indices for this label are')
     print(required_indices_for_label)
+
+    if feature_space == "Color Moments":
+        feature_space = "color_moments"
+
+    elif feature_space == "Histograms of Oriented Gradients(HOG)":
+        feature_space = "hog_descriptor"
+
+    elif feature_space == "ResNet-AvgPool-1024":
+        feature_space = "avgpool_descriptor"
+
+    elif feature_space == "ResNet-Layer3-1024":
+        feature_space = "layer3_descriptor"
+
+    elif feature_space == "ResNet-FC-1000":
+        feature_space = "fc_descriptor"
         
     
     for index in required_indices_for_label:
@@ -203,24 +218,6 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     display_images(display_images_list,display_indices,display_similarity_scores,0,0)
     print("Exit similarity_calculator_by_label")
            
-            
-        
-    
-    
-                
-            
-        
-        
-        
-        
-    
-    
-    
-        
-
-   
-   
-
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
     similarities = {
