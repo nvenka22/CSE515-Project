@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Oct  2 22:42:17 2023
-
-@author: nikhilvr
-"""
-
 import os
 import cv2
 from torchvision.models import resnet50

@@ -55,6 +55,7 @@ def display_hog(hog_descriptor, cell_size=(30, 10)):
 def display_images(images, indices, similarity_scores, rows, cols, scorestring):
     
     k = len(images)
+    
 
     #buckets = [[],[],[],[],[]]
 

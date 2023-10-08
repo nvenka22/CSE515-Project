@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 import statistics
+from sklearn.preprocessing import normalize
 
 
 import streamlit as st
@@ -148,8 +149,9 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     
     print("Entry similarity_calculator_by_label")
     image_data_by_label = feature_collection.find({'label':label})
-    
     final_scores = []
+    
+  
     
    
     
@@ -157,6 +159,7 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     required_indices_for_label = []
     
     
+    #Segregate images of the label in particular, and calculate similarity scores
     for doc in image_data_by_label:
         required_indices_for_label.append(doc['_id'])
         similarity_calculator(doc['_id'], odd_feature_collection, feature_collection, similarity_collection, dataset)
@@ -181,6 +184,7 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         feature_space = "fc_descriptor"
         
     
+   #Extract required scores and calculate average
     for index in required_indices_for_label:
         required_scores = []
         avg_score=0.0
@@ -188,10 +192,12 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         #print(image_similarity_scores[feature_space].keys())
         for dct_idx in required_indices_for_label:
             required_scores.append(image_similarity_scores[feature_space][str(dct_idx)])
-            print(required_scores)
+       # print(required_scores)
+        required_scores =[1 if x>1 else x for x in required_scores]
+        print(required_scores)
         avg_score=statistics.mean(required_scores)
         imagedata = feature_collection.find_one({'_id': index})
-        final_data={'imageId':imagedata['_id'],'image':imagedata['image'],'average_score':avg_score}
+        final_data={'imageId':imagedata['_id'],'image':cv2.cvtColor(np.array(imagedata['image'], dtype=np.uint8), cv2.COLOR_BGR2RGB),'average_score':avg_score}
         final_scores.append(final_data)
     
     #To test the output stream
@@ -210,12 +216,15 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         display_images_list.append(score['image'])
         display_indices.append(score['imageId'])
         display_similarity_scores.append(score['average_score'])
+        
+    #print("The lengths are :")
+    #print(str(len(display_images_list))+" "+str(len(display_indices))+" "+str(len(display_similarity_scores)))
     
     
         
     #Call display method for final output
     
-    display_images(display_images_list,display_indices,display_similarity_scores,0,0)
+    display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
     print("Exit similarity_calculator_by_label")
            
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
