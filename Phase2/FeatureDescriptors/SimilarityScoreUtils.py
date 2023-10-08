@@ -16,9 +16,14 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
+import statistics
+
 
 import streamlit as st
 from pathlib import Path
+
+from Utilities.DisplayUtils import *
+
 
 #Color Moments
 def featurenormalize(feature_vector):
@@ -97,7 +102,11 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
 
     similarities = similarity_collection.find_one({'_id': index})
     if similarities!=None:
+        print("Similarity score present for "+str(index)+" returning from DB")
         return similarities
+
+    print("Similarity score not present for "+str(index)+" calculating and caching to DB")
+
 
     if index%2 == 0:
         imagedata1 = feature_collection.find_one({'_id': index})
@@ -134,6 +143,83 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
     similarity_collection.update_one({'_id':index},{'$set':similarities},upsert = True)
     
     return similarities
+
+def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
+    
+    print("Entry similarity_calculator_by_label")
+    image_data_by_label = feature_collection.find({'label':4})
+    
+    final_scores = []
+    
+   
+    
+    
+    required_indices_for_label = []
+    
+    
+    for doc in image_data_by_label:
+        required_indices_for_label.append(doc['_id'])
+        similarity_calculator(doc['_id'], odd_feature_collection, feature_collection, similarity_collection, dataset)
+        
+        
+    print('The required indices for this label are')
+    print(required_indices_for_label)
+        
+    
+    for index in required_indices_for_label:
+        required_scores = []
+        avg_score=0.0
+        image_similarity_scores = similarity_collection.find_one({'_id': index})
+        #print(image_similarity_scores[feature_space].keys())
+        for dct_idx in required_indices_for_label:
+            required_scores.append(image_similarity_scores[feature_space][str(dct_idx)])
+            print(required_scores)
+        avg_score=statistics.mean(required_scores)
+        imagedata = feature_collection.find_one({'_id': index})
+        final_data={'imageId':imagedata['_id'],'image':imagedata['image'],'average_score':avg_score}
+        final_scores.append(final_data)
+    
+    #To test the output stream
+    #st.write(final_scores)
+    
+    #Sort the result dict to retrieve top k results
+    final_scores = sorted(final_scores, key = lambda x: x['average_score'],reverse=True)[:k]
+    
+    #Format final output to call display method
+    
+    display_images_list=[]
+    display_indices=[]
+    display_similarity_scores=[]
+    
+    for score in final_scores:
+        display_images_list.append(score['image'])
+        display_indices.append(score['imageId'])
+        display_similarity_scores.append(score['average_score'])
+    
+    
+        
+    #Call display method for final output
+    
+    display_images(display_images_list,display_indices,display_similarity_scores,0,0)
+    print("Exit similarity_calculator_by_label")
+           
+            
+        
+    
+    
+                
+            
+        
+        
+        
+        
+    
+    
+    
+        
+
+   
+   
 
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
