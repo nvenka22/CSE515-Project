@@ -151,13 +151,7 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     image_data_by_label = feature_collection.find({'label':label})
     final_scores = []
     
-  
-    
-   
-    
-    
     required_indices_for_label = []
-    
     
     #Segregate images of the label in particular, and calculate similarity scores
     for doc in image_data_by_label:
@@ -167,6 +161,21 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         
     print('The required indices for this label are')
     print(required_indices_for_label)
+
+    if feature_space == "Color Moments":
+        feature_space = "color_moments"
+
+    elif feature_space == "Histograms of Oriented Gradients(HOG)":
+        feature_space = "hog_descriptor"
+
+    elif feature_space == "ResNet-AvgPool-1024":
+        feature_space = "avgpool_descriptor"
+
+    elif feature_space == "ResNet-Layer3-1024":
+        feature_space = "layer3_descriptor"
+
+    elif feature_space == "ResNet-FC-1000":
+        feature_space = "fc_descriptor"
         
     
    #Extract required scores and calculate average
@@ -212,24 +221,6 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
     print("Exit similarity_calculator_by_label")
            
-            
-        
-    
-    
-                
-            
-        
-        
-        
-        
-    
-    
-    
-        
-
-   
-   
-
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
     similarities = {

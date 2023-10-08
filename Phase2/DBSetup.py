@@ -33,10 +33,10 @@ caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 if len(argv) > 1 :
 
     if argv[1] == "even":
-    	collection = connect_to_db('CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2','image_features')
+    	collection = connect_to_db('CSE515-MWD-ProjectPhase2','image_features')
     	push_even_to_mongodb(caltech101,collection)	
     else:
-    	collection = connect_to_db('CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2','image_features_odd')
+    	collection = connect_to_db('CSE515-MWD-ProjectPhase2','image_features_odd')
     	push_odd_to_mongodb(caltech101,collection)
     
 else:
