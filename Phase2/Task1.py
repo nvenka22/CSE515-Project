@@ -35,14 +35,15 @@ from MongoDB.MongoDBUtils import *
 
 mod_path = Path(__file__).parent.parent
 
-
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
-odd_feature_collection = connect_to_db('CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2','image_features_odd')
-feature_collection = connect_to_db('CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2','image_features')
-similarity_collection = connect_to_db('CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2','image_similarities')
+dbName = "CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2"
+odd_feature_collection = connect_to_db(dbName,'image_features_odd')
+feature_collection = connect_to_db(dbName,'image_features')
+similarity_collection = connect_to_db(dbName,'image_similarities')
 
 
-label = st.text_input('Enter the image label', 'Eg : 0,1,2...')
+label = st.text_input('Enter the image label', '0')
+label = int(label)
 k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 feature_space = st.text_input('Enter the required feature space', 'Eg : Color Moments')
 
