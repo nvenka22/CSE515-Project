@@ -218,6 +218,7 @@ def descriptor_calculator(image, idx,caltech101):
         'fc_descriptor': fc_descriptor.tolist()
     }
     
+
 def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset,feature_space = None):
     
     similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
@@ -330,7 +331,6 @@ def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,simi
     st.markdown('ResNet-FC-1000 - Cosine Similarity')
     show_ksimilar(fc_similar,feature_collection)
     return similarity_scores
-
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
