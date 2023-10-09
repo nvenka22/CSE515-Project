@@ -222,6 +222,7 @@ def descriptor_calculator(image, idx,caltech101):
         'fc_descriptor': fc_descriptor.tolist()
     }
     
+
 def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset,feature_space = None):
     
     similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
