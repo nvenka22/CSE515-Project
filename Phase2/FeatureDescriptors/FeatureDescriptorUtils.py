@@ -397,7 +397,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     if feature_model == "Color Moments":
         obj = feature_collection.find({},{"color_moments":1})
-        output_file += "latent_semantics_color_moments_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_color_moments_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             fetchedarray = doc['color_moments']
             cmarray = []
