@@ -18,6 +18,7 @@ from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 from pathlib import Path
 import pickle
+from heapq import nlargest
 
 import streamlit as st
 
@@ -25,6 +26,23 @@ from Utilities.DisplayUtils import *
 from FeatureDescriptors.FeatureDescriptorUtils import *
 from FeatureDescriptors.SimilarityScoreUtils import *
 from MongoDB.MongoDBUtils import *
+
+def query_ksimilar_new_label(image):
+    color_moments = color_moments_calculator(image)
+    hog_descriptor = hog_calculator(image)
+    avgpool_descriptor = avgpool_calculator(image)
+    layer3_descriptor = layer3_calculator(image)
+    fc_descriptor = fc_calculator(image)
+
+    imagedata = {
+        'image': image.tolist() if isinstance(image, np.ndarray) else image,  # Convert the image to a list for storage
+        'color_moments': color_moments.tolist() if isinstance(color_moments, np.ndarray) else color_moments,
+        'hog_descriptor': hog_descriptor.tolist() if isinstance(hog_descriptor, np.ndarray) else hog_descriptor,
+        'avgpool_descriptor': avgpool_descriptor.tolist() if isinstance(avgpool_descriptor, np.ndarray) else avgpool_descriptor,
+        'layer3_descriptor': layer3_descriptor.tolist() if isinstance(layer3_descriptor, np.ndarray) else layer3_descriptor,
+        'fc_descriptor': fc_descriptor.tolist()
+    }
+    return imagedata
 
 mod_path = Path(__file__).parent.parent
 
@@ -34,7 +52,7 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-ProjectPhase2"
+dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
@@ -51,9 +69,21 @@ option = st.selectbox(
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary") and uploaded_file is None:
+    avg = {}
     with st.container():    
-        queryksimilar(idx, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
+        #similarity_scores = queryksimilar(idx, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
+        sim_option = get_ksimilar_labels(idx, odd_feature_collection, feature_collection, caltech101, option)
+        st.write(len(sim_option))
+        for i in sim_option:
+            avg[i] = sum(sim_option[i])/len(sim_option[i])
+
+        srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
+        
+        for key, val in srt.items():
+            st.write(key, ": ", val)
+
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
+    avg = {}
     with st.container():
         
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
@@ -66,7 +96,16 @@ elif st.button("Run for uploaded image", type="primary") and uploaded_file is no
         left_co, cent_co,last_co = st.columns(3)
         with cent_co:
             st.image(image, channels="BGR")
+        imagedata = query_ksimilar_new_label(image)
+        sim_option = get_ksimilar_labels_new(imagedata,feature_collection,caltech101,option)
+        st.write(len(sim_option))
+        for i in sim_option:
+            avg[i] = sum(sim_option[i])/len(sim_option[i])
+
+        srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
         
-        queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
+        for key, val in srt.items():
+            st.write(key, ": ", val)
+
 else:
     st.write("")

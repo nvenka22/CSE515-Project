@@ -52,62 +52,40 @@ def display_hog(hog_descriptor, cell_size=(30, 10)):
         st.write(hog_descriptor)
     
     
-def display_images(images, indices, similarity_scores, rows, cols):
+def display_images(images, indices, similarity_scores, rows, cols, scorestring):
     
     k = len(images)
+    
 
-    buckets = [[],[],[],[],[]]
-
-    for i in range(0,k,5):
-
-        if i<k:
-            buckets[0].append([images[i],indices[i],similarity_scores[i]])
-
-        if i+1<k:
-            buckets[1].append([images[i+1],indices[i+1],similarity_scores[i+1]])
-
-        if i+2<k:
-            buckets[2].append([images[i+2],indices[i+2],similarity_scores[i+2]])
-
-        if i+3<k:
-            buckets[3].append([images[i+3],indices[i+3],similarity_scores[i+3]])
-
-        if i+4<k:
-            buckets[4].append([images[i+4],indices[i+4],similarity_scores[i+4]])
-
+    #buckets = [[],[],[],[],[]]
 
     with st.container():
-        
-        col1, col2, col3, col4, col5 = st.columns(5)
+        for i in range(0,k,5):
+            cols = st.columns(5)
 
-        with col1:
+            with cols[0]:
+                if i<k:
+                    st.image(images[i],caption = "Rank: "+str(i+1)+"\nImage ID: "+str(indices[i])+"\n"+scorestring+str(similarity_scores[i]))
 
-            for data in buckets[0]:
-                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+            with cols[1]:
+                if i+1<k:
+                    st.image(images[i+1],caption = "Rank: "+str(i+2)+"\nImage ID: "+str(indices[i+1])+"\n"+scorestring+str(similarity_scores[i+1]))
 
-        with col2:
+            with cols[2]:
+                if i+2<k:
+                    st.image(images[i+2],caption = "Rank: "+str(i+3)+"\nImage ID: "+str(indices[i+2])+"\n"+scorestring+str(similarity_scores[i+2]))
 
-            for data in buckets[1]:
-                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+            with cols[3]:
+                if i+3<k:
+                    st.image(images[i+3],caption = "Rank: "+str(i+4)+"\nImage ID: "+str(indices[i+3])+"\n"+scorestring+str(similarity_scores[i+3]))
 
-        with col3:
-
-            for data in buckets[2]:
-                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
-
-        with col4:
-
-            for data in buckets[3]:
-                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
-
-        with col5:
-
-            for data in buckets[4]:
-                st.image(data[0],caption = "Image ID: "+str(data[1])+" Similarity Score: "+str(data[2]))
+            with cols[4]:
+                if i+4<k:
+                    st.image(images[i+4],caption = "Rank: "+str(i+5)+"\nImage ID: "+str(indices[i+4])+"\n"+scorestring+str(similarity_scores[i+4]))
 
 
 
-def show_ksimilar(k_similar,collection):
+def show_ksimilar(k_similar,collection,scorestring):
     images = []
     indices = []
     similarity_scores = []
@@ -121,4 +99,4 @@ def show_ksimilar(k_similar,collection):
         indices.append(int(index))
         similarity_scores.append(k_similar[str(index)])
         
-    display_images(images, indices, similarity_scores, rows, cols)    
+    display_images(images, indices, similarity_scores, rows, cols,scorestring)    
