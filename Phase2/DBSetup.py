@@ -30,7 +30,7 @@ mod_path = Path(__file__).parent.parent
 
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 
-dbName = 'CSE515-MWD-Kesudh_Giri-ProjectPhase2'
+dbName = 'ProjectPhase1'
 
 if argv[1] == "even":
 	collection = connect_to_db(dbName,'image_features')
