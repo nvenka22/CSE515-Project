@@ -99,6 +99,66 @@ def similarity_score_fc(descriptor1, descriptor2):
     # Calculate Cosine Similarity for fc descriptors
     return round(cosine_similarity_calculator([descriptor1], [descriptor2]), 5)
 
+def get_ksimilar_labels(index,odd_feature_collection,feature_collection,dataset,feature_space):
+    #dict to store the similarity scores according to the label
+    sim_la = {}
+    #Getting image data from the dataset
+    if index%2 == 0:
+        imagedata1 = feature_collection.find_one({'_id': index})
+    else:
+        imagedata1 = odd_feature_collection.find_one({'_id': index})
+    
+    for cmpidx in tqdm(range(0,len(dataset),2)):
+        
+        imagedata2 = feature_collection.find_one({"_id": cmpidx})
+        label = imagedata2["label"]
+        #Calculating the similarity scores according to the given feature space.
+        if feature_space == "Color Moments":
+            similarity = similarity_score_color_moments(imagedata1["color_moments"], imagedata2["color_moments"])
+        elif feature_space == "Histograms of Oriented Gradients(HOG)":
+            similarity = similarity_score_hog(imagedata1["hog_descriptor"], imagedata2["hog_descriptor"])
+        elif feature_space == "ResNet-AvgPool-1024":
+            similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
+        elif feature_space == "ResNet-Layer3-1024":
+            similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
+        elif feature_space == "ResNet-FC-1000":
+            similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
+        
+        if label in sim_la:
+            sim_la[label].append(similarity)
+        else: 
+            sim_la[label] = []
+            sim_la[label].append(similarity)
+
+    return sim_la
+def get_ksimilar_labels_new(imagedata1,feature_collection,dataset,feature_space):
+    #dict to store the similarity scores according to the label
+    sim_la = {}
+    
+    for cmpidx in tqdm(range(0,len(dataset),2)):
+        
+        imagedata2 = feature_collection.find_one({"_id": cmpidx})
+        label = imagedata2["label"]
+        #Calculating the similarity scores according to the given feature space.
+        if feature_space == "Color Moments":
+            similarity = similarity_score_color_moments(imagedata1["color_moments"], imagedata2["color_moments"])
+        elif feature_space == "Histograms of Oriented Gradients(HOG)":
+            similarity = similarity_score_hog(imagedata1["hog_descriptor"], imagedata2["hog_descriptor"])
+        elif feature_space == "ResNet-AvgPool-1024":
+            similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
+        elif feature_space == "ResNet-Layer3-1024":
+            similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
+        elif feature_space == "ResNet-FC-1000":
+            similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
+        
+        if label in sim_la:
+            sim_la[label].append(similarity)
+        else: 
+            sim_la[label] = []
+            sim_la[label].append(similarity)
+    return sim_la
+
+
 def similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
     similarities = similarity_collection.find_one({'_id': index})
@@ -250,3 +310,6 @@ def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_colle
         similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
     
     return similarities
+
+
+
