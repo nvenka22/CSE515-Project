@@ -16,6 +16,10 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.decomposition import TruncatedSVD, NMF, LatentDirichletAllocation
+from sklearn.cluster import KMeans
+from sklearn import preprocessing as p
+import pickle
 
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
@@ -218,6 +222,7 @@ def descriptor_calculator(image, idx,caltech101):
         'fc_descriptor': fc_descriptor.tolist()
     }
     
+
 def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset,feature_space = None):
     
     similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
@@ -359,6 +364,107 @@ def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,simi
 
     return similarity_scores
 
+def reduce_dimensionality(feature_model, k, technique):
+    if technique == 'SVD':
+        reducer = TruncatedSVD(n_components=k)
+    elif technique == 'NNMF':
+        reducer = NMF(n_components=k)
+    elif technique == 'LDA':
+        reducer = LatentDirichletAllocation(n_components=k)
+    elif technique == 'k-Means':
+        reducer = KMeans(n_clusters=k)
+    else:
+        raise ValueError("Invalid dimensionality reduction technique")
+
+    latent_semantics = reducer.fit_transform(feature_model)
+    return latent_semantics
+
+def get_top_k_latent_semantics(latent_semantics, k):
+    top_k_indices = np.argsort(latent_semantics.sum(axis=0))[::-1][:k]
+    return top_k_indices
+    
+def list_imageID_weight_pairs(top_k_indices, latent_semantics):
+    imageID_weight_pairs = list(zip(top_k_indices, latent_semantics[:, top_k_indices]))
+    imageID_weight_pairs.sort(key=lambda x: np.mean(x[1]), reverse=True)
+    return imageID_weight_pairs
+
+def ls1(feature_model,k,dimred,feature_collection):
+
+    mod_path = Path(__file__).parent.parent
+    output_file = str(mod_path)+"/LatentSemantics/"
+
+    feature_descriptors = []
+
+    if feature_model == "Color Moments":
+        obj = feature_collection.find({},{"color_moments":1})
+        output_file += "latent_semantics_color_moments_"+dimred+"_output.pkl"
+        for doc in obj:
+            fetchedarray = doc['color_moments']
+            cmarray = []
+
+            for row in range(0,10):
+                for col in range(0,10):
+                    for channel in fetchedarray[row][col]:
+                        cmarray.append(channel[0])
+                        cmarray.append(channel[1])
+                        cmarray.append(channel[2])
+
+            cmarray = [0 if pd.isna(x) else x for x in cmarray]
+            feature_descriptors.append(cmarray)
+        feature_descriptors = np.array(feature_descriptors)
+
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        obj = feature_collection.find({},{"hog_descriptor":1})
+        output_file += "latent_semantics_hog_descriptor_"+dimred+"_output.pkl"
+        for doc in obj:
+            hogarray = doc['hog_descriptor']
+            hogarray = [0 if pd.isna(x) else x for x in hogarray]
+            feature_descriptors.append(hogarray)
+        feature_descriptors = np.array(feature_descriptors)
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        obj = feature_collection.find({},{"avgpool_descriptor":1})
+        output_file += "latent_semantics_avgpool_descriptor_"+dimred+"_output.pkl"
+        for doc in obj:
+            avgpoolarray = doc['avgpool_descriptor']
+            avgpoolarray = [0 if pd.isna(x) else x for x in avgpoolarray]
+            feature_descriptors.append(avgpoolarray)
+        feature_descriptors = np.array(feature_descriptors)
+
+    elif feature_model == "ResNet-Layer3-1024":
+        obj = feature_collection.find({},{"layer3_descriptor":1})
+        output_file += "latent_semantics_layer3_descriptor_"+dimred+"_output.pkl"
+        for doc in obj:
+            layer3array = doc['layer3_descriptor']
+            layer3array = [0 if pd.isna(x) else x for x in layer3array]
+            feature_descriptors.append(layer3array)
+        feature_descriptors = np.array(feature_descriptors)
+
+    elif feature_model == "ResNet-FC-1000":
+        obj = feature_collection.find({},{"fc_descriptor":1})
+        output_file += "latent_semantics_fc_descriptor_"+dimred+"_output.pkl"
+        for doc in obj:
+            fcarray = doc['fc_descriptor']
+            fcarray = [0 if pd.isna(x) else x for x in fcarray]
+            feature_descriptors.append(fcarray)
+        feature_descriptors = np.array(feature_descriptors)
+
+    min_max_scaler = p.MinMaxScaler() 
+    feature_descriptors = min_max_scaler.fit_transform(feature_descriptors)
+    latent_semantics = reduce_dimensionality(feature_descriptors, k, dimred)
+    top_k_indices = get_top_k_latent_semantics(latent_semantics, k)
+
+    pickle.dump((top_k_indices, latent_semantics), open(output_file, 'wb+'))
+
+    imageID_weight_pairs = list_imageID_weight_pairs(top_k_indices, latent_semantics)
+
+    with st.container():
+        rank = 1
+        for imageID, weight in imageID_weight_pairs:
+            st.markdown("Rank: "+str(rank))
+            with st.expander("Image ID: "+str(imageID)+" weights:"):
+                st.write(weight.tolist())
+            rank+=1
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
