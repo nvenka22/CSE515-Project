@@ -466,6 +466,67 @@ def ls1(feature_model,k,dimred,feature_collection):
                 st.write(weight.tolist())
             rank+=1
 
+
+################## Task 5 Methods
+def get_index_for_label(label, dataset):
+    index = []
+    for i in range(0, len(dataset.y), 2):
+        if dataset.y[i] == label:
+            index.append(i)
+    
+    return index
+
+def get_sim_for_labels(labelx, labely, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset):
+    scores = []
+
+    feature_model_map = {"Color Moments": "color_moments", "Histograms of Oriented Gradients(HOG)": "hog_descriptor", 
+                         "ResNet-AvgPool-1024": "avgpool_descriptor","ResNet-Layer3-1024": "layer3_descriptor","ResNet-FC-1000": "fc_descriptor"}
+    for x in labelx:
+        sim_scores_for_x = similarity_calculator(x, odd_feature_collection,feature_collection, similarity_collection, dataset)[feature_model_map.get(feature_model)]
+        
+        for y in labely:
+            scores.append(sim_scores_for_x[y])
+    
+    return np.mean(scores)
+
+def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset):
+    labels = [label for label in range(101)]
+    
+    label_sim_matrix = np.zeros((101,101))
+    for idx in range(100):
+        label_sim_matrix[idx][idx] = 1
+
+    for labelx in labels:
+        labelx_idx = get_index_for_label(labelx, dataset)
+
+        for labely in labels:
+            if labelx == labely: continue
+
+            labely_idx = get_index_for_label(labely, dataset)
+            score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
+            label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labely] = score
+    
+    return label_sim_matrix
+
+def get_reduced_dim_labels(sim_matrix, dimred, k):
+    latent_semantics = reduce_dimensionality(sim_matrix, k, dimred)
+    top_k_label_indices = get_top_k_latent_semantics(latent_semantics, k)
+
+    return latent_semantics, top_k_label_indices
+
+def list_label_weight_pairs(top_k_indices, latent_semantics):
+    label_weight_pairs = list(zip(top_k_indices, latent_semantics[:, top_k_indices]))
+    label_weight_pairs.sort(key=lambda x: np.mean(x[1]), reverse=True)
+    
+    with st.container():
+        rank = 1
+        for labelID, weight in label_weight_pairs:
+            st.markdown("Rank: "+str(rank))
+            with st.expander("Label: "+str(labelID)+" weights:"):
+                st.write(weight.tolist())
+            rank+=1
+#################################
+
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
 dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]
