@@ -45,7 +45,7 @@ feature_model = st.selectbox(
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
-k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
+k = st.number_input('Enter k for Top k Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 dimred = st.selectbox(
         "Select Dimensionality Reduction Technique",
         ("SVD", "NNMF", "LDA","k-Means"),

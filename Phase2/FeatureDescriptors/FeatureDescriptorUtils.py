@@ -415,7 +415,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
         obj = feature_collection.find({},{"hog_descriptor":1})
-        output_file += "latent_semantics_hog_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             hogarray = doc['hog_descriptor']
             hogarray = [0 if pd.isna(x) else x for x in hogarray]
@@ -424,7 +424,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-AvgPool-1024":
         obj = feature_collection.find({},{"avgpool_descriptor":1})
-        output_file += "latent_semantics_avgpool_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             avgpoolarray = doc['avgpool_descriptor']
             avgpoolarray = [0 if pd.isna(x) else x for x in avgpoolarray]
@@ -433,7 +433,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-Layer3-1024":
         obj = feature_collection.find({},{"layer3_descriptor":1})
-        output_file += "latent_semantics_layer3_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             layer3array = doc['layer3_descriptor']
             layer3array = [0 if pd.isna(x) else x for x in layer3array]
@@ -442,7 +442,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-FC-1000":
         obj = feature_collection.find({},{"fc_descriptor":1})
-        output_file += "latent_semantics_fc_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             fcarray = doc['fc_descriptor']
             fcarray = [0 if pd.isna(x) else x for x in fcarray]
