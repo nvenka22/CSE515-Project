@@ -397,7 +397,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     if feature_model == "Color Moments":
         obj = feature_collection.find({},{"color_moments":1})
-        output_file += "latent_semantics_color_moments_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_1_color_moments_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             fetchedarray = doc['color_moments']
             cmarray = []
@@ -415,7 +415,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
         obj = feature_collection.find({},{"hog_descriptor":1})
-        output_file += "latent_semantics_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_1_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             hogarray = doc['hog_descriptor']
             hogarray = [0 if pd.isna(x) else x for x in hogarray]
@@ -424,7 +424,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-AvgPool-1024":
         obj = feature_collection.find({},{"avgpool_descriptor":1})
-        output_file += "latent_semantics_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_1_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             avgpoolarray = doc['avgpool_descriptor']
             avgpoolarray = [0 if pd.isna(x) else x for x in avgpoolarray]
@@ -433,7 +433,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-Layer3-1024":
         obj = feature_collection.find({},{"layer3_descriptor":1})
-        output_file += "latent_semantics_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_1_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             layer3array = doc['layer3_descriptor']
             layer3array = [0 if pd.isna(x) else x for x in layer3array]
@@ -442,7 +442,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-FC-1000":
         obj = feature_collection.find({},{"fc_descriptor":1})
-        output_file += "latent_semantics_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_1_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             fcarray = doc['fc_descriptor']
             fcarray = [0 if pd.isna(x) else x for x in fcarray]
@@ -465,6 +465,51 @@ def ls1(feature_model,k,dimred,feature_collection):
             with st.expander("Image ID: "+str(imageID)+" weights:"):
                 st.write(weight.tolist())
             rank+=1
+
+
+def ls4(feature_model,k,feature_collection):
+
+    mod_path = Path(__file__).parent.parent
+    output_file = str(mod_path)+"/LatentSemantics/"
+
+    similarity_matrix = [[0*4339]*4339]
+
+    if feature_model == "Color Moments":
+        output_file += "latent_semantics_4_color_moments_output.pkl"
+
+        for idx in tqdm(range(0,8667,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,8667,2):
+                similarity_matrix[idx/2][cmpidx/2] = scores['color_moments'][cmpidx]
+
+
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        output_file += "latent_semantics_4_hog_descriptor_output.pkl"
+        for idx in tqdm(range(0,8667,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,8667,2):
+                similarity_matrix[idx/2][cmpidx/2] = scores['hog_descriptor'][cmpidx]
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        output_file += "latent_semantics_4_avgpool_descriptor_output.pkl"
+        for idx in tqdm(range(0,8667,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,8667,2):
+                similarity_matrix[idx/2][cmpidx/2] = scores['avgpool_descriptor'][cmpidx]
+
+    elif feature_model == "ResNet-Layer3-1024":
+        output_file += "latent_semantics_4_layer3_descriptor_output.pkl"
+        for idx in tqdm(range(0,8667,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,8667,2):
+                similarity_matrix[idx/2][cmpidx/2] = scores['layer3_descriptor'][cmpidx]
+
+    elif feature_model == "ResNet-FC-1000":
+        output_file += "latent_semantics_4_fc_descriptor_output.pkl" 
+        for idx in tqdm(range(0,8667,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,8667,2):
+                similarity_matrix[idx/2][cmpidx/2] = scores['fc_descriptor'][cmpidx]
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
