@@ -46,15 +46,9 @@ feature_model = st.selectbox(
         disabled=st.session_state.disabled,
     )
 k = st.number_input('Enter k for Top k Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
-dimred = st.selectbox(
-        "Select Dimensionality Reduction Technique",
-        ("SVD", "NNMF", "LDA","k-Means"),
-        label_visibility=st.session_state.visibility,
-        disabled=st.session_state.disabled,
-    )
 
 if st.button("Run", type="primary"):
     with st.container():    
-    	similarity_matrix = ls4(feature_model,k,dimred,similarity_collection)    	
+    	ls2(feature_model,k,feature_collection)    	
 else:
     st.write("")
