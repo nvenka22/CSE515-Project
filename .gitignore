@@ -13,3 +13,6 @@ Phase2/LatentSemantics
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+MongoTransfer.py
+MongoCounter.py
