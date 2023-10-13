@@ -55,6 +55,6 @@ dimred = st.selectbox(
 
 if st.button("Run", type="primary"):
     with st.container():    
-    	ls1(feature_model,k,dimred,feature_collection)    	
+    	similarity_matrix = ls4(feature_model,k,dimred,similarity_collection)    	
 else:
     st.write("")

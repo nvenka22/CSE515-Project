@@ -276,6 +276,3 @@ def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_colle
         similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
     
     return similarities
-
-
-
