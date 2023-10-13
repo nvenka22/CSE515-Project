@@ -34,6 +34,19 @@ def connect_to_db(dbname, collectionName):
     print('Connected to '+str(collection))
     return collection
 
+def get_client():
+    client = MongoClient('localhost',27017)
+    return client
+
+def get_collection(client,dbname,collectionName):
+    db = client[dbname]
+    collection = db[collectionName]
+    print('Connected to '+str(collection))
+    return collection
+
+def close_client(client):
+    client.close()
+
 """def push_dataset_to_mongodb(dataset,collection):
     for idx in tqdm(range(len(dataset))):
         image = cv2.cvtColor(np.array(dataset.__getitem__(index = idx)[0]),cv2.COLOR_RGB2BGR)
