@@ -20,7 +20,10 @@ from sklearn.decomposition import TruncatedSVD, NMF, LatentDirichletAllocation
 from sklearn.cluster import KMeans
 from sklearn import preprocessing as p
 import pickle
+import scipy.io
 from tensorly.decomposition import parafac
+import tensorly as tl
+import scipy.misc
 
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
@@ -510,72 +513,247 @@ def ls1(feature_model,k,dimred,feature_collection):
             rank+=1
 
 
-def perform_cp_decomposition(feature_tensor, k):
-    weights, factors = parafac(feature_tensor, rank=k)
+def perform_cp_decomposition(feature_tensor, k, reg_lambda=0.0):
+    # Perform CP decomposition
+    X_reshaped = tl.reshape(feature_tensor, (50, -1))
+
+    weights, factors = parafac(X_reshaped, rank=k)
     return weights, factors
+
+def perform_cp_decomposition_manual(feature_tensor, k, reg_lambda=0.0):
+    # Get the shape of the feature tensor
+    I, J, K = feature_tensor.shape
+
+    # Initialize the factor matrices randomly
+    np.random.seed(0)  # Set seed for reproducibility
+    A = np.random.rand(I, k)
+    B = np.random.rand(J, k)
+    C = np.random.rand(K, k)
+
+    print("Performing CP")
+    # Perform alternate least squares optimization
+    max_iter = 100
+    for _ in range(max_iter):
+        # Update factor matrix A
+        for i in range(I):
+            BtC = np.dot(C.T, B)
+
+            print(BtC.shape)
+            print(feature_tensor[i,:,:].T.shape)
+            print(A[i,:].shape)
+
+            A[i, :] = np.linalg.solve(np.dot(BtC.T, BtC), np.dot(feature_tensor[i, :, :].T,BtC))
+
+        # Update factor matrix B
+        for j in range(J):
+            CtA = np.dot(A, C.T)
+            B[j, :] = np.linalg.solve(np.dot(CtA.T, CtA) + reg_lambda * np.eye(k), np.dot(CtA.T, feature_tensor[:, j, :].flatten()))
+
+        # Update factor matrix C
+        for k_ in range(K):
+            AtB = np.dot(A, B.T)
+            C[k_, :] = np.linalg.solve(np.dot(AtB.T, AtB) + reg_lambda * np.eye(k), np.dot(AtB.T, feature_tensor[:, :, k_].flatten()))
+
+    # Calculate the weights tensor
+    weights = np.einsum('ik,jk,lk->ijkl', A, B, C)
+
+    return weights, (A, B, C)
+
+def get_top_k_cp_semantics(weights, factors, k):
+    latent_semantics = factors[2]  # Assuming labels are in the third mode
+    top_k_indices = np.argsort(weights)[::-1][:k]
+    return top_k_indices
+
+
+def list_label_weight_pairs(weights, factors, k):
+    label_weight_pairs = []
+
+    for i in range(k):
+        latent_semantic = factors[1][:, i]  # Assuming labels are in the third mode
+        top_indices = np.argsort(latent_semantic)[::-1]
+        top_weights = latent_semantic[top_indices]
+        
+        label_weight_pairs.extend([(index, weight) for index, weight in zip(top_indices, top_weights)])
+
+    label_weight_pairs.sort(key=lambda x: x[1], reverse=True)
+    return label_weight_pairs
+
+def store_by_feature(output_file,feature_collection):
+
+    labels = []
+    cm_features = []
+    hog_features = []
+    avgpool_features =[]
+    layer3_features = []
+    fc_features = []
+
+    for index in tqdm(range(0,dataset_size,2)):
+        doc = feature_collection.find_one({'_id': index})
+
+        label = int(doc['label'])
+        print(label)
+
+        labelarray = [0 if x!=label else 1 for x in range(101)]
+
+        labels.append(labelarray)
+                    
+        fetchedarray = doc['color_moments']
+
+        cmarray = []
+
+        for row in range(0,10):
+            for col in range(0,10):
+                for channel in fetchedarray[row][col]:
+                    cmarray.append(channel[0])
+                    cmarray.append(channel[1])
+                    cmarray.append(channel[2])
+
+        cmarray = [0 if pd.isna(x) else x for x in cmarray]
+
+        cmarray = np.array(cmarray)
+
+        cm_features.append(cmarray)
+
+        fetchedarray = doc['hog_descriptor']
+                
+        hogarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        hogarray = np.array(hogarray)
+
+        hog_features.append(hogarray)
+
+        fetchedarray = doc['avgpool_descriptor']
+                
+        avgpoolarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        avgpoolarray = np.array(avgpoolarray)
+
+        avgpool_features.append(avgpoolarray)
+
+        layer3array = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        layer3array = np.array(layer3array)
+
+        layer3_features.append(layer3array)
+
+        fcarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        fcarray = np.array(fcarray)
+
+        fc_features.append(fcarray)
+
+    scipy.io.savemat(output_file+'arrays.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features})  
+
+def split_into_batches(arr, batch_size):
+    for i in range(0, len(arr), batch_size):
+        yield arr[i:i+batch_size]
 
 def ls2(feature_model,k,feature_collection):
 
     mod_path = Path(__file__).parent.parent
     output_file = str(mod_path)+"/LatentSemantics/"
 
-    label_factors = []
+    try:
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+
+    except scipy.io.matlab.miobase.MatReadError as e:
+
+        store_by_feature(output_file,feature_collection)
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+
+    
+
+    print(type(labels),type(cm_features),type(hog_features),type(avgpool_features),type(layer3_features),type(fc_features))
+    print(np.array(labels).shape,np.array(cm_features).shape,np.array(hog_features).shape,np.array(avgpool_features).shape,np.array(layer3_features).shape,np.array(fc_features).shape)
+
+    label = tl.tensor(labels)
+    cm_features = tl.tensor(cm_features)
+    hog_features = tl.tensor(hog_features)
+    layer3_features = tl.tensor(layer3_features)
+    fc_features = tl.tensor(fc_features)
+
+    print(type(labels),type(cm_features),type(hog_features),type(avgpool_features),type(layer3_features),type(fc_features))
+    print(np.array(labels).shape,np.array(cm_features).shape,np.array(hog_features).shape,np.array(avgpool_features).shape,np.array(layer3_features).shape,np.array(fc_features).shape)
+
 
     if feature_model == "Color Moments":
 
         output_file += "latent_semantics_2_color_moments_"+str(k)+"_output.pkl"
 
-        images = []
-        feature_descriptors = []
-        labels = []
+        num_samples = len(cm_features)  # Adjust based on your data
+        num_labels = 101
+        descriptor_length = len(cm_features[0])  # Adjust based on your feature descriptor length
 
-        for index in tqdm(range(0,dataset_size,2)):
-
-            doc = feature_collection.find_one({'_id': index})
-
-            fetchedarray = doc['color_moments']
-            
-            cmarray = []
-
-            for row in range(0,10):
-                for col in range(0,10):
-                    for channel in fetchedarray[row][col]:
-                        cmarray.append(channel[0])
-                        cmarray.append(channel[1])
-                        cmarray.append(channel[2])
-
-            cmarray = [0 if pd.isna(x) else x for x in cmarray]
-
-            image = np.array(doc['image'], dtype=np.uint8)
-            resized_image = cv2.resize(np.array(image), (300, 100))
-            image_array = np.array(resized_image)
-            #print(image_array.shape)
-            cmarray = np.array(cmarray)
-            label = doc['label']
-
-            images.append(image_array)
-            feature_descriptors.append(cmarray)
-            labels.append(label)
-
-        # Convert lists to numpy arrays
-        images_array = np.array(images)
-        images_array = images_array.reshape(images_array.shape[0], -1)
-
-        feature_descriptors_array = np.array(feature_descriptors)
-        labels_array = np.array(labels).reshape(-1,1)
-
-        print(images_array.shape)
-        print(feature_descriptors_array.shape)
-        print(labels_array.shape)
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(cm_features)
+        labels_array = np.array(labels).reshape(-1, 101, 1)
 
         # Stack the arrays to construct the three-modal tensor
-        cp_tensor = np.concatenate([images_array, feature_descriptors_array, labels_array], axis=1)
-        cp_tensor = cp_tensor.transpose(0, 2, 1).reshape(cp_tensor.shape[0], 900, 100)
+        result_list = []
 
-        print(cp_tensor.shape)
+        # Iterate through each image
+        for i in tqdm(range(4339)):
+            # Extract the feature descriptors and labels for the current image
+            feature_descriptors_image = feature_descriptors_array[i]
+            labels_image = labels_array[i]
 
-        weights,factors = perform_cp_decomposition(cp_tensor, k)
+            feature_descriptors_image = (feature_descriptors_image - np.mean(feature_descriptors_image)) / np.std(feature_descriptors_image)
 
+            feature_descriptors_image = np.nan_to_num(feature_descriptors_image)
+
+            # Perform the np.multiply.outer operation
+            cp_tensor = np.multiply.outer(feature_descriptors_image, labels_image)
+
+            # Append the result to the list
+            result_list.append(cp_tensor)
+
+        # Convert the list of tensors to a NumPy array
+        result_array = np.array(result_list)
+        result_array = np.squeeze(result_array, axis=3)
+
+        # The resulting array will have shape (4339, 900, 101)
+        print(result_array.shape)
+
+        batch_size = 50
+
+        # Split result_array into batches
+        batches = list(split_into_batches(result_array, batch_size))
+
+        # Initialize lists to store the decomposition results
+        weights_list = []
+        factors_list = [[],[]]
+
+        # Perform CP decomposition on each batch
+        for batch in tqdm(batches):  # Wrap the loop with tqdm
+            weights, factors = perform_cp_decomposition(batch, k, 0.01)  # Assuming k is defined
+            #print(type(weights),len(weights),weights,type(factors),len(factors),factors)
+            weights_list.append(weights)
+            factors_list[0].append(factors[0])
+            factors_list[1].append(factors[1])
+
+        print(factors_list[0][0].shape,factors_list[1][0].shape)
+
+        for factor in factors_list:
+            print(factor.shape)
+            print(type(factor[0][0]))
+        # Combine the results from different batches
+        #weights = np.stack(weights_list, axis=0)
+        #factors = np.stack(factors_list, axis=0)
     """elif feature_model == "Histograms of Oriented Gradients(HOG)":
             
                     output_file += "latent_semantics_2_hog_descriptor_"+str(k)+"_output.pkl"
@@ -658,21 +836,19 @@ def ls2(feature_model,k,feature_collection):
                     latent_semantic.sort(key=lambda x: x[1], reverse=True)
                     label_factors.append(latent_semantic)"""
 
-    label_factors = np.array(label_factors)
-
-    top_k_indices = get_top_k_latent_semantics(label_factors, k)
+    top_k_indices = get_top_k_cp_semantics(weights, factors, k)
 
     print(top_k_indices)
 
     pickle.dump((top_k_indices, label_factors), open(output_file, 'wb+'))
 
-    imageID_weight_pairs = list_imageID_weight_pairs(top_k_indices, label_factors)
+    label_weight_pairs = list_label_weight_pairs(weights, factors, k)
 
     with st.container():
         rank = 1
-        for imageID, weight in imageID_weight_pairs:
+        for label, weight in label_weight_pairs:
             st.markdown("Rank: "+str(rank))
-            with st.expander("Image ID: "+str(imageID)+" weights:"):
+            with st.expander("Label: "+str(label)+" weights:"):
                 st.write(weight.tolist())
             rank+=1
 
