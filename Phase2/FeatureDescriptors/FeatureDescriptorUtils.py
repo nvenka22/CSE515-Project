@@ -20,6 +20,7 @@ from sklearn.decomposition import TruncatedSVD, NMF, LatentDirichletAllocation
 from sklearn.cluster import KMeans
 from sklearn import preprocessing as p
 import pickle
+from tensorly.decomposition import parafac
 
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
@@ -364,9 +365,51 @@ def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,simi
 
     return similarity_scores
 
+def manual_svd(X):
+    # Convert X to a NumPy array
+    X = np.array(X)
+
+    # Compute covariance matrix
+    cov = np.dot(X.T, X)
+
+    # Eigenvalue decomposition of the covariance matrix
+    eigenvalues, eigenvectors = np.linalg.eig(cov)
+
+    # Replace NaN values with 0
+    eigenvalues = np.nan_to_num(eigenvalues)
+    eigenvectors = np.nan_to_num(eigenvectors)
+
+    # Sort eigenvalues and eigenvectors in descending order
+    sorted_indices = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[sorted_indices]
+    eigenvectors = eigenvectors[:, sorted_indices]
+
+    # Compute the singular values and their reciprocals
+    singular_values = np.sqrt(eigenvalues)
+    reciprocals_singular_values = np.where(singular_values != 0, 1/singular_values, 0)
+
+    # Replace NaN values with 0
+    singular_values = np.nan_to_num(singular_values)
+    reciprocals_singular_values = np.nan_to_num(reciprocals_singular_values)
+
+    # Compute U and V matrices
+    U = np.dot(X, eigenvectors)
+    V = np.dot(eigenvectors, np.diag(singular_values))
+
+    # Replace NaN values with 0
+    U = np.nan_to_num(U)
+    V = np.nan_to_num(V)
+
+    return U, V, reciprocals_singular_values
+
 def reduce_dimensionality(feature_model, k, technique):
     if technique == 'SVD':
-        reducer = TruncatedSVD(n_components=k)
+        U, V, sigma_inv = manual_svd(feature_model)
+
+        # Take the first k columns of U and V
+        latent_semantics = np.dot(U[:, :k], V[:k, :])
+
+        return latent_semantics
     elif technique == 'NNMF':
         reducer = NMF(n_components=k)
     elif technique == 'LDA':
@@ -397,7 +440,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     if feature_model == "Color Moments":
         obj = feature_collection.find({},{"color_moments":1})
-        output_file += "latent_semantics_color_moments_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_1_color_moments_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             fetchedarray = doc['color_moments']
             cmarray = []
@@ -415,7 +458,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
         obj = feature_collection.find({},{"hog_descriptor":1})
-        output_file += "latent_semantics_hog_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_1_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             hogarray = doc['hog_descriptor']
             hogarray = [0 if pd.isna(x) else x for x in hogarray]
@@ -424,7 +467,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-AvgPool-1024":
         obj = feature_collection.find({},{"avgpool_descriptor":1})
-        output_file += "latent_semantics_avgpool_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_1_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             avgpoolarray = doc['avgpool_descriptor']
             avgpoolarray = [0 if pd.isna(x) else x for x in avgpoolarray]
@@ -433,7 +476,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-Layer3-1024":
         obj = feature_collection.find({},{"layer3_descriptor":1})
-        output_file += "latent_semantics_layer3_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_1_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             layer3array = doc['layer3_descriptor']
             layer3array = [0 if pd.isna(x) else x for x in layer3array]
@@ -442,7 +485,7 @@ def ls1(feature_model,k,dimred,feature_collection):
 
     elif feature_model == "ResNet-FC-1000":
         obj = feature_collection.find({},{"fc_descriptor":1})
-        output_file += "latent_semantics_fc_descriptor_"+dimred+"_output.pkl"
+        output_file += "latent_semantics_1_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for doc in obj:
             fcarray = doc['fc_descriptor']
             fcarray = [0 if pd.isna(x) else x for x in fcarray]
@@ -465,6 +508,235 @@ def ls1(feature_model,k,dimred,feature_collection):
             with st.expander("Image ID: "+str(imageID)+" weights:"):
                 st.write(weight.tolist())
             rank+=1
+
+
+def perform_cp_decomposition(feature_tensor, k):
+    weights, factors = parafac(feature_tensor, rank=k)
+    return weights, factors
+
+def ls2(feature_model,k,feature_collection):
+
+    mod_path = Path(__file__).parent.parent
+    output_file = str(mod_path)+"/LatentSemantics/"
+
+    label_factors = []
+
+    if feature_model == "Color Moments":
+
+        output_file += "latent_semantics_2_color_moments_"+str(k)+"_output.pkl"
+
+        images = []
+        feature_descriptors = []
+        labels = []
+
+        for index in tqdm(range(0,dataset_size,2)):
+
+            doc = feature_collection.find_one({'_id': index})
+
+            fetchedarray = doc['color_moments']
+            
+            cmarray = []
+
+            for row in range(0,10):
+                for col in range(0,10):
+                    for channel in fetchedarray[row][col]:
+                        cmarray.append(channel[0])
+                        cmarray.append(channel[1])
+                        cmarray.append(channel[2])
+
+            cmarray = [0 if pd.isna(x) else x for x in cmarray]
+
+            image = np.array(doc['image'], dtype=np.uint8)
+            resized_image = cv2.resize(np.array(image), (300, 100))
+            image_array = np.array(resized_image)
+            #print(image_array.shape)
+            cmarray = np.array(cmarray)
+            label = doc['label']
+
+            images.append(image_array)
+            feature_descriptors.append(cmarray)
+            labels.append(label)
+
+        # Convert lists to numpy arrays
+        images_array = np.array(images)
+        images_array = images_array.reshape(images_array.shape[0], -1)
+
+        feature_descriptors_array = np.array(feature_descriptors)
+        labels_array = np.array(labels).reshape(-1,1)
+
+        print(images_array.shape)
+        print(feature_descriptors_array.shape)
+        print(labels_array.shape)
+
+        # Stack the arrays to construct the three-modal tensor
+        cp_tensor = np.concatenate([images_array, feature_descriptors_array, labels_array], axis=1)
+        cp_tensor = cp_tensor.transpose(0, 2, 1).reshape(cp_tensor.shape[0], 900, 100)
+
+        print(cp_tensor.shape)
+
+        weights,factors = perform_cp_decomposition(cp_tensor, k)
+
+    """elif feature_model == "Histograms of Oriented Gradients(HOG)":
+            
+                    output_file += "latent_semantics_2_hog_descriptor_"+str(k)+"_output.pkl"
+            
+                    for index in range(0,dataset_size,2):
+            
+                        doc = feature_collection.find_one({'_id': index})
+            
+                        hogarray = doc['hog_descriptor']
+            
+                        hogarray = [0 if pd.isna(x) else x for x in hogarray]
+                        
+                        cp_tensor = np.hstack((doc['image'], hogarray, np.array([doc['label']])))
+            
+                        weights,factors = perform_cp_decomposition(cp_tensor, k)
+            
+                        label_factors.append(factors[2])
+            
+                elif feature_model == "ResNet-AvgPool-1024":
+            
+                    output_file += "latent_semantics_2_avgpool_descriptor_"+str(k)+"_output.pkl"
+            
+                    for index in range(0,dataset_size,2):
+            
+                        doc = feature_collection.find_one({'_id': index})
+            
+                        avgpoolarray = doc['avgpool_descriptor']
+            
+                        avgpoolarray = [0 if pd.isna(x) else x for x in avgpoolarray]
+                        
+                        cp_tensor = np.hstack((doc['image'], avgpoolarray, np.array([doc['label']])))
+            
+                        weights,factors = perform_cp_decomposition(cp_tensor, k)
+            
+                        label_factors.append(factors[2])
+            
+            
+                elif feature_model == "ResNet-Layer3-1024":
+            
+                    output_file += "latent_semantics_2_layer3_descriptor_"+str(k)+"_output.pkl"
+            
+                    for index in range(0,dataset_size,2):
+            
+                        doc = feature_collection.find_one({'_id': index})
+            
+                        layer3array = doc['layer3_descriptor']
+            
+                        layer3array = [0 if pd.isna(x) else x for x in layer3array]
+                        
+                        cp_tensor = np.hstack((doc['image'], layer3array, np.array([doc['label']])))
+            
+                        weights,factors = perform_cp_decomposition(cp_tensor, k)
+            
+                        label_factors.append(factors[2])
+            
+            
+                elif feature_model == "ResNet-FC-1000":
+            
+                    output_file += "latent_semantics_2_fc_descriptor_"+str(k)+"_output.pkl"
+            
+                    for index in range(0,dataset_size,2):
+            
+                        doc = feature_collection.find_one({'_id': index})
+            
+                        fcarray = doc['fc_descriptor']
+            
+                        fcarray = [0 if pd.isna(x) else x for x in fcarray]
+                        
+                        cp_tensor = np.hstack((doc['image'], fcarray, np.array([doc['label']])))
+            
+                        weights,factors = perform_cp_decomposition(cp_tensor, k)
+            
+                        label_factors.append(factors[2])
+            
+                label_factors = []
+                
+                for i, factor in enumerate(factors):
+                    weights = factor[:, 0]  # Extract the weights
+                    latent_semantic = [(label, weight) for label, weight in zip(labels_array.flatten(), weights)]
+                    latent_semantic.sort(key=lambda x: x[1], reverse=True)
+                    label_factors.append(latent_semantic)"""
+
+    label_factors = np.array(label_factors)
+
+    top_k_indices = get_top_k_latent_semantics(label_factors, k)
+
+    print(top_k_indices)
+
+    pickle.dump((top_k_indices, label_factors), open(output_file, 'wb+'))
+
+    imageID_weight_pairs = list_imageID_weight_pairs(top_k_indices, label_factors)
+
+    with st.container():
+        rank = 1
+        for imageID, weight in imageID_weight_pairs:
+            st.markdown("Rank: "+str(rank))
+            with st.expander("Image ID: "+str(imageID)+" weights:"):
+                st.write(weight.tolist())
+            rank+=1
+
+def ls4(feature_model,k,dimred,similarity_collection):
+
+    mod_path = Path(__file__).parent.parent
+    output_file = str(mod_path)+"/LatentSemantics/"
+
+    similarity_matrix = [[0 for col in range(4339)] for row in range(4339)]
+
+    if feature_model == "Color Moments":
+        output_file += "latent_semantics_4_color_moments_"+dimred+"_"+str(k)+"_output.pkl"
+        for idx in tqdm(range(0,dataset_size,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,dataset_size,2):
+                similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['color_moments'][str(cmpidx)]
+
+
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        output_file += "latent_semantics_4_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        for idx in tqdm(range(0,dataset_size,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,dataset_size,2):
+                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        output_file += "latent_semantics_4_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        for idx in tqdm(range(0,dataset_size,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,dataset_size,2):
+                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
+
+    elif feature_model == "ResNet-Layer3-1024":
+        output_file += "latent_semantics_4_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        for idx in tqdm(range(0,dataset_size,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,dataset_size,2):
+                similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
+
+    elif feature_model == "ResNet-FC-1000":
+        output_file += "latent_semantics_4_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        for idx in tqdm(range(0,dataset_size,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,dataset_size,2):
+                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
+
+    similarity_vector = np.array(similarity_matrix).reshape(-1,1)
+    #print(similarity_vector.shape)
+    latent_semantics = reduce_dimensionality(similarity_matrix, k, dimred)
+    top_k_indices = get_top_k_latent_semantics(latent_semantics, k)
+
+    pickle.dump((top_k_indices, latent_semantics), open(output_file, 'wb+'))
+
+    imageID_weight_pairs = list_imageID_weight_pairs(top_k_indices, latent_semantics)
+
+    with st.container():
+        rank = 1
+        for imageID, weight in imageID_weight_pairs:
+            st.markdown("Rank: "+str(rank))
+            with st.expander("Image ID: "+str(imageID)+" weights:"):
+                st.write(weight.tolist())
+            rank+=1
+
+    return similarity_matrix
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]

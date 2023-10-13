@@ -6,8 +6,13 @@
 
 Phase1/.ipynb_checkpoints/
 
+Phase2/LatentSemantics
+
 .vscode/*    
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+MongoTransfer.py
+MongoCounter.py
