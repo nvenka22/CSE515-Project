@@ -156,7 +156,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
 
     similarities = similarity_collection.find_one({'_id': index})
     if similarities!=None:
-        print("Similarity score present for "+str(index)+" returning from DB")
+        # print("Similarity score present for "+str(index)+" returning from DB")
         return similarities
 
     print("Similarity score not present for "+str(index)+" calculating and caching to DB")
