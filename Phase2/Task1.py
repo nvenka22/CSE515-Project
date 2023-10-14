@@ -32,7 +32,7 @@ if "visibility" not in st.session_state:
     st.session_state.disabled = False
 
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
-dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
+dbName = "CSE515-MWD-ProjectPhase2"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
