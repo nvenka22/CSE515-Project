@@ -303,3 +303,39 @@ def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_colle
         similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
     
     return similarities
+
+
+def get_similarity_score_resnet(query_image_features,image_features):
+  
+    dot_product = np.dot(query_image_features, image_features)
+    norm1 = np.linalg.norm(query_image_features)
+    norm2 = np.linalg.norm(image_features)
+    similarity = dot_product / (norm1 * norm2)
+    
+    return similarity
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
