@@ -82,18 +82,19 @@ if st.button("Run", type="primary") and uploaded_file is None:
 
         #Calculating the average for every label
         sim_option = get_ksimilar_labels(imagedata1,feature_collection,caltech101,option)
+        print("Outisde get_k_similar_labels_old")
         # st.write(len(sim_option))
         #Calculating the average for every label
         for i in sim_option:
             avg[i] = sum(sim_option[i])/len(sim_option[i])
         #Sorting the dict to get the k most similar labels along with average similarity scores 
         if option == "Color Moments" or option == "ResNet-Layer3-1024":
-            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
+            srt = dict(sorted(avg.items(), key = lambda x: x[1])[:k])
         else:
-            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[-k:])
+            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
         
         for key, val in srt.items():
-            st.write( get_class_name(key), ": ", val)
+            st.write(get_class_name(key), ": ", val)
 # Function to run for the uploaded image 
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     avg = {}
@@ -119,9 +120,9 @@ elif st.button("Run for uploaded image", type="primary") and uploaded_file is no
 
         #Sorting the dict to get the k most similar labels along with average similarity scores 
         if option == "Color Moments" or option == "ResNet-Layer3-1024":
-            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
+            srt = dict(sorted(avg.items(), key = lambda x: x[1])[:k])
         else:
-            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[-k:])
+            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
 
         for key, val in srt.items():
             st.write(get_class_name(key), ": ", val)

@@ -125,6 +125,33 @@ def get_ksimilar_labels(imagedata1,feature_collection,dataset,feature_space):
 
     return sim_la
 
+def get_k_similar_labels_old(idx,similarity_collection,feature_collection,dataset,feature_space):
+    sim_la = {}
+    print("Inside get)k_similar_labels_old\n")
+    f_spaces = similarity_collection.find_one({'_id': idx})
+    for cmpidx in tqdm(range(0,len(dataset),2)):
+        imagedata2 = feature_collection.find_one({"_id": cmpidx})
+        label = imagedata2["label"]
+        #Retrieving the similarity scores according to the given feature space.
+        if feature_space == "Color Moments":
+            similarity = f_spaces["color_moments"][str(cmpidx)]
+        elif feature_space =="Histograms of Oriented Gradients(HOG)":
+            similarity = f_spaces["hog_descriptor"][str(cmpidx)]
+        elif feature_space ==  "ResNet-AvgPool-1024":
+            similarity = f_spaces["avgpool_descriptor"][str(cmpidx)]
+        elif feature_space == "ResNet-Layer3-1024":
+            similarity = f_spaces["layer3_descriptor"][str(cmpidx)]
+        elif feature_space == "ResNet-FC-1000":
+            similarity = f_spaces["fc_descriptor"][str(cmpidx)]
+        #Storing similarity scores
+        if label in sim_la:
+            sim_la[label].append(similarity)
+        else: 
+            sim_la[label] = []
+            sim_la[label].append(similarity)
+
+    return sim_la
+
 def similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
     similarities = similarity_collection.find_one({'_id': index})

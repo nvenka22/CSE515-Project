@@ -298,7 +298,7 @@ def descriptor_calculator(image, idx,caltech101):
 
 def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset,feature_space = None):
     
-    similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
+    similarity_scores = similarity_collection.find_one({'_id': index})
     color_moments_similar = dict(sorted(similarity_scores["color_moments"].items(), key = lambda x: x[1])[:k])
     hog_similar = dict(sorted(similarity_scores["hog_descriptor"].items(), key = lambda x: x[1],reverse = True)[:k])
     avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1],reverse=True)[:k])
@@ -774,7 +774,10 @@ def ls4(feature_model,k,dimred,similarity_collection):
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['color_moments'][str(cmpidx)]
+                if 1 - scores['color_moments'][str(cmpidx)]<0:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 0
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['color_moments'][str(cmpidx)]
 
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
@@ -782,28 +785,40 @@ def ls4(feature_model,k,dimred,similarity_collection):
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
+                if scores['hog_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-AvgPool-1024":
         output_file += "latent_semantics_4_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
+                if scores['avgpool_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-Layer3-1024":
         output_file += "latent_semantics_4_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
+                if 1 - scores['layer3_descriptor'][str(cmpidx)]<0:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 0
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-FC-1000":
         output_file += "latent_semantics_4_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
+                if scores['fc_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
 
     similarity_vector = np.array(similarity_matrix).reshape(-1,1)
     #print(similarity_vector.shape)
@@ -823,6 +838,26 @@ def ls4(feature_model,k,dimred,similarity_collection):
             rank+=1
 
     return similarity_matrix
+
+def get_simlar_ls():
+    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space.")
+def get_simlar_ls_img() :
+    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+def get_simlar_ls_label():
+    print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
+def get_simlar_ls_label_img():
+    print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
+def get_simlar_ls__by_label():
+    print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
+def get_simlar_ls__by_label_img():
+    print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
+def get_simlarlabel_byimg_ls():
+    print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
+def get_simlarlabel_byimg_ls_img():
+    print("identifies and lists k most relevant images, along with their scores, under the selected latent space.for new image upload")
+
+
+
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
