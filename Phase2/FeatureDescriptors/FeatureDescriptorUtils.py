@@ -2,6 +2,7 @@ import os
 import cv2
 from torchvision.models import resnet50
 from torchvision.datasets import Caltech101
+from torch.autograd import Variable
 import pandas as pd
 import numpy as np
 import torch
@@ -29,6 +30,9 @@ from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
 from pathlib import Path
+
+
+
 
 def color_moments_calculator(image):
     
@@ -209,6 +213,74 @@ def fc_calculator(image):
 
     return tensor_1000
 
+def fc_calculator_2(image):
+    
+    # Define a hook to get the output of the "fc" layer
+    output_hook = None
+    def hook_fn(module, input, output):
+        nonlocal output_hook
+        output_hook = output
+
+    # Attach the hook to the "fc" layer
+    resnet_model.fc.register_forward_hook(hook_fn)
+
+    # Define a function to preprocess the image
+    def preprocess_image(image):
+        transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((256)),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=dataset_mean_values, std=dataset_std_dev_values),
+        ])
+        return transform(image).unsqueeze(0)
+
+    # Define a function to get the 1000-dimensional tensor
+    def get_1000_dimensional_tensor(image):
+        input_tensor = preprocess_image(image)
+        resnet_model.eval()
+        with torch.no_grad():
+            _ = resnet_model(input_tensor)
+        return output_hook.squeeze()
+
+    # Get the 1000-dimensional tensor
+    tensor_1000 = get_1000_dimensional_tensor(image)
+
+    activation = torch.nn.Softmax()
+    output_tensor = activation(tensor_1000)
+
+    return output_tensor
+
+def resnet_features(image):
+    # Remove the final classification layer
+    print("in")
+    resnet50 = torch.nn.Sequential(*list(resnet_model.children())[:-13])
+    # Set the model to evaluation mode
+    resnet50.eval()
+
+    # Define the preprocessing transformations
+    def preprocess_img(image):
+        preprocess = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((256)),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        return preprocess(image).unsqueeze(0)
+
+    tensor_1000 = preprocess_img(image)
+    print(type(tensor_1000))
+    print("Shape of output tensor: ", tensor_1000.shape)
+
+    with torch.no_grad():
+        features = resnet50(tensor_1000)
+    
+    print("Features shape: ", features.shape)
+
+    return features.squeeze().numpy()
+
+    
 def descriptor_calculator(image, idx,caltech101):
     color_moments = color_moments_calculator(image)
     hog_descriptor = hog_calculator(image)
@@ -229,7 +301,7 @@ def descriptor_calculator(image, idx,caltech101):
 
 def queryksimilar(index,k,odd_feature_collection,feature_collection,similarity_collection,dataset,feature_space = None):
     
-    similarity_scores = similarity_calculator(index,odd_feature_collection,feature_collection,similarity_collection,dataset)
+    similarity_scores = similarity_collection.find_one({'_id': index})
     color_moments_similar = dict(sorted(similarity_scores["color_moments"].items(), key = lambda x: x[1])[:k])
     hog_similar = dict(sorted(similarity_scores["hog_descriptor"].items(), key = lambda x: x[1],reverse = True)[:k])
     avgpool_similar = dict(sorted(similarity_scores["avgpool_descriptor"].items(), key = lambda x: x[1],reverse=True)[:k])
@@ -512,6 +584,20 @@ def ls1(feature_model,k,dimred,feature_collection):
                 st.write(weight.tolist())
             rank+=1
 
+def get_class_name(label):
+    data = {
+	0: "Faces", 1: "Faces_easy", 2: "Leopards", 3: "Motorbikes", 4: "accordion", 5: "airplanes", 6: "anchor", 7: "ant", 8: "barrel", 9: "bass",
+	10: "beaver", 11: "binocular", 12: "bonsai", 13: "brain", 14: "brontosaurus", 15: "buddha", 16: "butterfly", 17: "camera", 18: "cannon", 19: "car_side",
+	20: "ceiling_fan", 21: "cellphone", 22: "chair", 23: "chandelier", 24: "cougar_body", 25: "cougar_face", 26: "crab", 27: "crayfish", 28: "crocodile", 29: "crocodile_head",
+	30: "cup", 31: "dalmatian", 32: "dollar_bill", 33: "dolphin", 34: "dragonfly", 35: "electric_guitar", 36: "elephant", 37: "emu", 38: "euphonium", 39: "ewer",
+	40: "ferry", 41: "flamingo", 42: "flamingo_head", 43: "garfield", 44: "gerenuk", 45: "gramophone", 46: "grand_piano", 47: "hawksbill", 48: "headphone", 49: "hedgehog",
+	50: "helicopter", 51: "ibis", 52: "inline_skate", 53: "joshua_tree", 54: "kangaroo", 55: "ketch", 56: "lamp", 57: "laptop", 58: "llama", 59: "lobster",
+	60: "lotus", 61: "mandolin", 62: "mayfly", 63: "menorah", 64: "metronome", 65: "minaret", 66: "nautilus", 67: "octopus", 68: "okapi", 69: "pagoda",
+	70: "panda", 71: "pigeon", 72: "pizza", 73: "platypus", 74: "pyramid", 75: "revolver", 76: "rhino", 77: "rooster", 78: "saxophone", 79: "schooner",
+	80: "scissors", 81: "scorpion", 82: "seahorse", 83: "snoopy", 84: "soccer_ball", 85: "stapler", 86: "starfish", 87: "stegosaurus", 88: "stop_sign", 89: "strawberry",
+	90: "sunflower", 91: "tick", 92: "trilobite", 93: "umbrella", 94: "watch", 95: "water_lilly", 96: "wheelchair", 97: "wild_cat", 98: "windsor_chair", 99: "wrench", 100: "yin_yang"}
+
+    return data[label]
 
 def perform_cp_decomposition(feature_tensor, k, reg_lambda=0.0):
     # Perform CP decomposition
@@ -864,7 +950,10 @@ def ls4(feature_model,k,dimred,similarity_collection):
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['color_moments'][str(cmpidx)]
+                if 1 - scores['color_moments'][str(cmpidx)]<0:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 0
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['color_moments'][str(cmpidx)]
 
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
@@ -872,28 +961,40 @@ def ls4(feature_model,k,dimred,similarity_collection):
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
+                if scores['hog_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-AvgPool-1024":
         output_file += "latent_semantics_4_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
+                if scores['avgpool_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-Layer3-1024":
         output_file += "latent_semantics_4_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
+                if 1 - scores['layer3_descriptor'][str(cmpidx)]<0:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 0
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-FC-1000":
         output_file += "latent_semantics_4_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
-                similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
+                if scores['fc_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
 
     similarity_vector = np.array(similarity_matrix).reshape(-1,1)
     #print(similarity_vector.shape)
@@ -914,6 +1015,38 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
     return similarity_matrix
 
+def get_simlar_ls():
+    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space.")
+def get_simlar_ls_img() :
+    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+def get_simlar_ls_label():
+    print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
+def get_simlar_ls_label_img():
+    print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
+def get_simlar_ls__by_label():
+    print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
+def get_simlar_ls__by_label_img():
+    print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
+def get_simlarlabel_byimg_ls():
+    print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
+def get_simlarlabel_byimg_ls_img():
+    print("identifies and lists k most relevant images, along with their scores, under the selected latent space.for new image upload")
+
+
+
+
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
 dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]
+
+data = {
+	0: "Faces", 1: "Faces_easy", 2: "Leopards", 3: "Motorbikes", 4: "accordion", 5: "airplanes", 6: "anchor", 7: "ant", 8: "barrel", 9: "bass",
+	10: "beaver", 11: "binocular", 12: "bonsai", 13: "brain", 14: "brontosaurus", 15: "buddha", 16: "butterfly", 17: "camera", 18: "cannon", 19: "car_side",
+	20: "ceiling_fan", 21: "cellphone", 22: "chair", 23: "chandelier", 24: "cougar_body", 25: "cougar_face", 26: "crab", 27: "crayfish", 28: "crocodile", 29: "crocodile_head",
+	30: "cup", 31: "dalmatian", 32: "dollar_bill", 33: "dolphin", 34: "dragonfly", 35: "electric_guitar", 36: "elephant", 37: "emu", 38: "euphonium", 39: "ewer",
+	40: "ferry", 41: "flamingo", 42: "flamingo_head", 43: "garfield", 44: "gerenuk", 45: "gramophone", 46: "grand_piano", 47: "hawksbill", 48: "headphone", 49: "hedgehog",
+	50: "helicopter", 51: "ibis", 52: "inline_skate", 53: "joshua_tree", 54: "kangaroo", 55: "ketch", 56: "lamp", 57: "laptop", 58: "llama", 59: "lobster",
+	60: "lotus", 61: "mandolin", 62: "mayfly", 63: "menorah", 64: "metronome", 65: "minaret", 66: "nautilus", 67: "octopus", 68: "okapi", 69: "pagoda",
+	70: "panda", 71: "pigeon", 72: "pizza", 73: "platypus", 74: "pyramid", 75: "revolver", 76: "rhino", 77: "rooster", 78: "saxophone", 79: "schooner",
+	80: "scissors", 81: "scorpion", 82: "seahorse", 83: "snoopy", 84: "soccer_ball", 85: "stapler", 86: "starfish", 87: "stegosaurus", 88: "stop_sign", 89: "strawberry",
+	90: "sunflower", 91: "tick", 92: "trilobite", 93: "umbrella", 94: "watch", 95: "water_lilly", 96: "wheelchair", 97: "wild_cat", 98: "windsor_chair", 99: "wrench", 100: "yin_yang"}

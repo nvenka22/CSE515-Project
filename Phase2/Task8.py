@@ -11,12 +11,13 @@ from PIL import Image
 import warnings
 warnings.filterwarnings("ignore")
 from scipy.spatial.distance import cosine
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 from pathlib import Path
+import pickle
 
 import streamlit as st
 
@@ -27,26 +28,33 @@ from MongoDB.MongoDBUtils import *
 
 mod_path = Path(__file__).parent.parent
 
+caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
+
 if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
 
+idx = st.number_input('Enter ImageID',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
+k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
-label = st.number_input('Enter Image Label',placeholder="0",format = "%d",min_value=0,max_value=100)
-k = st.number_input('Enter k for similar images',placeholder="0",format = "%d",min_value=1,max_value=8676)
-feature_space = st.selectbox(
-        "Select Feature Space",
-        ("Color Moments", "Histograms of Oriented Gradients(HOG)", "ResNet-AvgPool-1024","ResNet-Layer3-1024","ResNet-FC-1000"),
+dimred = st.selectbox(
+        "Select Dimensionality Reduction Technique",
+        ("SVD", "NNMF", "LDA","k-Means"),
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
-
+uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary"):
-    similarity_calculator_by_label(label, feature_space, k,odd_feature_collection, feature_collection, similarity_collection, caltech101)
+    with st.container():    
+    	get_simlar_ls_label()    	
+elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
+    with st.container():    
+        get_simlar_ls_label_img()     
+else:
+    st.write("")

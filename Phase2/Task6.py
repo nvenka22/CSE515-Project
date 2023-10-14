@@ -34,7 +34,7 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-ProjectPhase2"
+dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
