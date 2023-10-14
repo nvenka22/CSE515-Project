@@ -17,7 +17,7 @@ feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
 
 
-k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
+k = st.number_input('Enter K for Dim Reduction',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
 feature_model = st.selectbox(
         "Select Feature Space",
@@ -42,7 +42,7 @@ if st.button("Run", type="primary"):
         ### Dim reduction on Sim matx -2
         latent_semantics, top_k_indices = get_reduced_dim_labels(sim_matrix, dimred, k) 
         ### Storing latent Semantics - 3
-        np.savez(str(mod_path)+"/LatentSemantics/latent_semantics_{feature_model}_{dimred}_{k}.npz", latent_semantics = latent_semantics)
+        np.savez(f"Phase2/LatentSemantics/latent_semantics_{feature_model.replace(' ','_')}_{dimred}_{k}.npz", latent_semantics = latent_semantics)
         ### Listing Label Weight Pairs - 4
         list_label_weight_pairs(top_k_indices, latent_semantics)
 

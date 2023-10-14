@@ -600,7 +600,7 @@ def get_sim_for_labels(labelx, labely, feature_model, odd_feature_collection, fe
         sim_scores_for_x = similarity_calculator(x, odd_feature_collection,feature_collection, similarity_collection, dataset)[feature_model_map.get(feature_model)]
         
         for y in labely:
-            scores.append(sim_scores_for_x[y])
+            scores.append(sim_scores_for_x[str(y)])
     
     return np.mean(scores)
 
@@ -608,10 +608,10 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
     labels = [label for label in range(101)]
     
     label_sim_matrix = np.zeros((101,101))
-    for idx in range(100):
+    for idx in range(101):
         label_sim_matrix[idx][idx] = 1
 
-    for labelx in labels:
+    for labelx in tqdm(labels):
         labelx_idx = get_index_for_label(labelx, dataset)
 
         for labely in labels:
