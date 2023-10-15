@@ -481,13 +481,14 @@ def reduce_dimensionality(feature_model, k, technique):
         print(U.shape,V.shape,sigma_inv.shape)
 
         # Take the first k columns of U and V
-        latent_semantics = np.dot(U[:, :k], np.dot(np.diag(sigma_inv[:k]), V[:k, :]))
+        latent_semantics = np.dot(U[:,:V.shape[1]], np.dot(np.diag(sigma_inv[:k]),V[:k, :]).T)
 
-        latent_semantics = latent_semantics[:,:k]
+        #latent_semantics = latent_semantics[:,:k]
 
         print("Latent Semantics Shape: "+str(latent_semantics.shape))
 
         return latent_semantics
+
     elif technique == 'NNMF':
         reducer = NMF(n_components=k)
     elif technique == 'LDA':
@@ -1326,7 +1327,6 @@ def get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file):
     print(latent_semantics.shape)
     
     
-    
 def get_simlar_ls_img() :
     print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
     
@@ -1421,11 +1421,96 @@ def get_simlar_ls__by_label_img():
 def get_simlarlabel_byimg_ls():
     print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
 
+def task10(label,latentk,feature_model,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101):
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path)+"/LatentSemantics/"
+    
+    if feature_model == "Color Moments":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+str(latentk)+"_output.pkl"
+    
 
-def task10(label,latentk,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101):
-    print("identifies and lists k most relevant images, along with their scores, under the selected latent space.for new image upload")
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_"+str(latentk)+"_output.pkl"    
+        
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_"+str(latentk)+"_output.pkl"
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+str(latentk)+"_output.pkl"
+       
+    elif feature_model == "ResNet-FC-1000":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+str(latentk)+"_output.pkl"            
+
+    elif feature_model == "RESNET":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+str(latentk)+"_output.pkl"
+    
+    print(pkl_file_path)
+
+    with open(pkl_file_path,'rb') as file:
+        print('File path is '+pkl_file_path)
+        __,pickle_data = pickle.load(file)
+        
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+
+    try:
+
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(output_file,feature_collection)
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+    
+    print('Pickle File Loaded')
+        
+    print(pickle_data.shape)
+
+    print(labels.shape,labels)
+
+    
+    if pickle_data.shape[0] == 4339:
 
 
+
+
+
+    #elif pickle_data.shape[0] == 101:
 
 
 dataset_size = 8677
