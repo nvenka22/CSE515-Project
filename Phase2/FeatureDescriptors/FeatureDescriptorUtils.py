@@ -1350,7 +1350,7 @@ def get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file,fe
         
 
 
-def get_ls_similar_labels_label_weighted(pickle_data, query_label_index, k):
+def get_ls_similar_labels_label_weighted(pickle_data, query_label_index, k, getdict = False):
     
     sim_la = {}
     for i in range(0,101):
@@ -1358,6 +1358,9 @@ def get_ls_similar_labels_label_weighted(pickle_data, query_label_index, k):
         #print(sim_la[i])
     
     sim_la = dict(sorted(sim_la.items(), key = lambda x: x[1] , reverse = True)[:k])
+
+    if getdict == True:
+        return sim_la
     
     #print top k matching labels
     for key, val in sim_la.items():
@@ -1382,17 +1385,50 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k):
     #print top k matching labels
     for key, val in sim_la.items():
         st.write(key, ": ", val)
-    
-    
-        
 
-        
-        
+def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature_collection):
+
+    similarity_image_scores = {}
+    similarity_label_scores = {}
+
+    image_data_by_label = feature_collection.find({'label':label})
+
+    final_scores = []
     
+    required_indices_for_label = []
+    labels_array = []
     
-    
-    
-    
+    #Segregate images of the label in particular, and calculate similarity scores
+    for doc in tqdm(image_data_by_label):
+        required_indices_for_label.append(doc['_id'])
+        labels_array.append(doc['label'])
+
+    print("Labels array"+str(type(labels_array))+str(len(labels_array)))
+
+    label_ls = []
+
+    for index in required_indices_for_label:
+        label_ls.append(pickle_data[index])
+
+    label_ls = np.array(label_ls)
+    print(label_ls.shape)
+
+    mean_label_ls = np.mean(label_ls,axis = 0).reshape(-1,1)
+    print(mean_label_ls.shape,np.array(pickle_data[0]).reshape(-1,1).shape)
+
+    for index in tqdm(range(0,8677,2)):
+        #print(int(index/2))
+        imagedata = feature_collection.find_one({'_id':index})
+        imglabel = imagedata['label']
+        #print("Label"+str(label))
+        similarity_image_scores[index] = cosine_similarity_calculator(pickle_data[int(index/2)].reshape(-1,1), mean_label_ls)
+        if imglabel not in similarity_label_scores.keys():
+            similarity_label_scores[imglabel] = []
+            similarity_label_scores[imglabel].append(similarity_image_scores[index])
+        else:
+            similarity_label_scores[imglabel].append(similarity_image_scores[index])
+
+    return similarity_image_scores,similarity_label_scores
     
 def get_simlar_ls_img() :
     print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
@@ -1573,11 +1609,47 @@ def task10(label,latentk,feature_model,dimred,latsem,k,odd_feature_collection,fe
     
     if pickle_data.shape[0] == 4339:
 
+        image_similarities,_ = get_ls_similar_images_from_label_image_weighted(pickle_data,label, k, feature_collection)
+
+        final_scores = dict(sorted(image_similarities.items(), key=lambda item: item[1], reverse=True)[:k])
+
+        print(final_scores)
+    
+        #Format final output to call display method
+        
+        display_images_list=[]
+        display_indices=[]
+        display_similarity_scores=[]
+        
+        for key in final_scores.keys():
+
+            imagedata = feature_collection.find_one({'_id':key})
+
+            image = np.array(imagedata['image'], dtype=np.uint8)
+
+            image = cv2.cvtColor(image,cv2.COLOR_RGB2BGR)
+
+            display_images_list.append(image)
+            display_indices.append(key)
+            display_similarity_scores.append(final_scores[key])
+            
+        #print("The lengths are :")
+        #print(str(len(display_images_list))+" "+str(len(display_indices))+" "+str(len(display_similarity_scores)))
+        
+        #Call display method for final output
+        
+        display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
 
 
+    elif pickle_data.shape[0] == 101:
 
+        sim_la = get_ls_similar_labels_label_weighted(pickle_data, label, 1, True)
 
-    #elif pickle_data.shape[0] == 101:
+        print(get_class_name(list(sim_la.keys())[0]))
+
+        matching_label = list(sim_la.keys())[0]
+
+        similarity_calculator_by_label(matching_label,feature_model,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)
 
 
 dataset_size = 8677
