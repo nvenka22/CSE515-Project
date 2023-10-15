@@ -1242,30 +1242,38 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
     return similarity_matrix
 
-def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
+def get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file):
     mod_path = Path(__file__).parent.parent
     pkl_file_path = str(mod_path)+"/LatentSemantics/"
     
-    # if feature_model == "Color Moments":
-    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    if feature_model == "Color Moments":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+str(latentk)+"_output.pkl"
+    
+
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+str(latentk)+"_output.pkl"    
         
 
-
-    # elif feature_model == "Histograms of Oriented Gradients(HOG)":
-    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    elif feature_model == "ResNet-AvgPool-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_"+str(latentk)+"_output.pkl"
         
 
-    # elif feature_model == "ResNet-AvgPool-1024":
-    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
-        
-
-    # elif feature_model == "ResNet-Layer3-1024":
-    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+{dimred}+"_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    elif feature_model == "ResNet-Layer3-1024":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
        
-    # elif feature_model == "ResNet-FC-1000":
-    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    elif feature_model == "ResNet-FC-1000":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
     
-    
+    print(pkl_file_path)
     
     pkl_file_path+="latent_semantics_3_ResNet-AvgPool-1024_SVD_5_output.pkl"
     with open(pkl_file_path,'rb') as file:
@@ -1412,7 +1420,9 @@ def get_simlar_ls__by_label_img():
     print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
 def get_simlarlabel_byimg_ls():
     print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
-def get_simlarlabel_byimg_ls_img():
+
+
+def task10(label,latentk,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101):
     print("identifies and lists k most relevant images, along with their scores, under the selected latent space.for new image upload")
 
 
