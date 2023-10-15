@@ -17,3 +17,4 @@ Phase2/LatentSemantics
 
 MongoTransfer.py
 MongoCounter.py
+.vscode/launch.json
