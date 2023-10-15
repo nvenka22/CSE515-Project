@@ -1262,9 +1262,9 @@ def get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file,fe
 
     elif feature_model == "ResNet-AvgPool-1024":
         if dimred!="":
-            pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+dimred+"_"+str(latentk)+"_output.pkl"
         else:
-            pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_"+str(latentk)+"_output.pkl"
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+str(latentk)+"_output.pkl"
         
 
     elif feature_model == "ResNet-Layer3-1024":
@@ -1275,7 +1275,7 @@ def get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file,fe
     
     print(pkl_file_path)
     
-    pkl_file_path+="latent_semantics_4_layer3_descriptor_LDA_5_output.pkl"
+    #pkl_file_path+="latent_semantics_4_layer3_descriptor_LDA_5_output.pkl"
     with open(pkl_file_path,'rb') as file:
         print('File path is '+pkl_file_path)
         __,pickle_data = pickle.load(file)
@@ -1313,44 +1313,76 @@ def get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file,fe
         
     print(pickle_data.shape)
     
+    print(labels.shape , labels)
+    
+    query_label_index = np.nonzero(labels[int(idx/2)])[0][0]
+    
+    query_img_label = get_class_name(np.nonzero(labels[int(idx/2)])[0][0])
+    
+    
+    
+    print(query_img_label)
+    
     #Calculate Feature Descriptor for input image and reduce dimensions
     
-    input_image_feature_descriptor = np.array(layer3_features[int(idx/2)]).reshape(1, -1)
-    print(input_image_feature_descriptor.shape)
-    print("Input before reshaping:")
-    print(input_image_feature_descriptor)
-    #min_max_scaler = p.MinMaxScaler() 
-    #input_image_feature_descriptor = min_max_scaler.fit_transform(input_image_feature_descriptor)
-    #print("Input feature descriptor:")
-    #print(input_image_feature_descriptor)
-    print('Reduction started with dimred '+dimred)
-    latent_semantics_input_image = reduce_dimensionality(input_image_feature_descriptor, 5, dimred)
-    print('Reduction end')
-    print(latent_semantics_input_image.shape)
+    # input_image_feature_descriptor = np.array(avgpool_features[int(idx/2)]).reshape(1, -1)
+    # print(input_image_feature_descriptor.shape)
+    # print("Input before reshaping:")
+    # print(input_image_feature_descriptor)
+    # #min_max_scaler = p.MinMaxScaler() 
+    # #input_image_feature_descriptor = min_max_scaler.fit_transform(input_image_feature_descriptor)
+    # #print("Input feature descriptor:")
+    # #print(input_image_feature_descriptor)
+    # print('Reduction started with dimred '+dimred)
+    # latent_semantics_input_image = reduce_dimensionality(input_image_feature_descriptor, latentk, dimred)
+    # print('Reduction end')
+    # print(latent_semantics_input_image.shape)
     
     #Compare LS vectors with every other image
     
     if(latsem == 'LS1' or latsem == 'LS4'):
-        get_ls_similar_labels_image_weighted(pickle_data,latent_semantics_input_image, k)
+        get_ls_similar_labels_image_weighted(pickle_data,labels,idx, k)
         
     
     else:
-        get_ls_similar_labels_label_weighted(pickle_data, latent_semantics_input_image, k)
+        get_ls_similar_labels_label_weighted(pickle_data, query_label_index, k)
         
 
 
-def get_ls_similar_labels_label_weighted(pickle_data, latent_semantics_input_image, k):
+def get_ls_similar_labels_label_weighted(pickle_data, query_label_index, k):
     
     sim_la = {}
     for i in range(0,101):
-        sim_la[i] = cosine_similarity_calculator(np.array(pickle_data[i]),latent_semantics_input_image)
-        print(sim_la[i])
+        sim_la[i] = cosine_similarity_calculator(pickle_data[i],pickle_data[query_label_index])
+        #print(sim_la[i])
     
     sim_la = dict(sorted(sim_la.items(), key = lambda x: x[1] , reverse = True)[:k])
     
     #print top k matching labels
     for key, val in sim_la.items():
         st.write(get_class_name(key), ": ", val)
+        
+        
+def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k):
+    similarity_image_scores = {}
+    
+    for i in range(0,8677,2):
+        if get_class_name(np.nonzero(labels[int(i/2)])[0][0]) not in similarity_image_scores.keys():
+            similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])]=[]
+        similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],pickle_data[int(idx/2)]))
+    
+    
+    sim_la = {}
+    for key in similarity_image_scores.keys():
+        sim_la[key] = np.mean(similarity_image_scores[key])
+    
+    sim_la = dict(sorted(sim_la.items(), key = lambda x: x[1] , reverse = True)[:k])
+    
+    #print top k matching labels
+    for key, val in sim_la.items():
+        st.write(key, ": ", val)
+    
+    
         
 
         
