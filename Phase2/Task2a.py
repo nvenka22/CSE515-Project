@@ -52,7 +52,7 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-ProjectPhase2"
+dbName = "CSE515-MWD-ProjectPhase2-Final"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
@@ -69,63 +69,65 @@ option = st.selectbox(
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 # Function to run for the given queary image
 if st.button("Run", type="primary") and uploaded_file is None:
-    avg = {}
-    with st.container():  
-        #Getting image data from the dataset  
-        if idx%2 == 0:
-            imagedata1 = feature_collection.find_one({'_id': idx})
-        else:
-            imagedata1 = odd_feature_collection.find_one({'_id': idx})
-        image = np.array(imagedata1['image'], dtype=np.uint8)
-        st.image(image, channels="BGR")
-        st.write("Query image label: ", get_class_name(imagedata1["label"]))
+    with st.spinner('Calculating...'):
+        avg = {}
+        with st.container():  
+            #Getting image data from the dataset  
+            if idx%2 == 0:
+                imagedata1 = feature_collection.find_one({'_id': idx})
+            else:
+                imagedata1 = odd_feature_collection.find_one({'_id': idx})
+            image = np.array(imagedata1['image'], dtype=np.uint8)
+            st.image(image, channels="BGR")
+            st.write("Query image label: ", get_class_name(imagedata1["label"]))
 
-        #Calculating the average for every label
-        sim_option = get_ksimilar_labels(imagedata1,feature_collection,caltech101,option)
-        print("Outisde get_k_similar_labels_old")
-        # st.write(len(sim_option))
-        #Calculating the average for every label
-        for i in sim_option:
-            avg[i] = sum(sim_option[i])/len(sim_option[i])
-        #Sorting the dict to get the k most similar labels along with average similarity scores 
-        if option == "Color Moments" or option == "ResNet-Layer3-1024":
-            srt = dict(sorted(avg.items(), key = lambda x: x[1])[:k])
-        else:
-            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
-        
-        for key, val in srt.items():
-            st.write(get_class_name(key), ": ", val)
+            #Calculating the average for every label
+            sim_option = get_ksimilar_labels(imagedata1,feature_collection,caltech101,option)
+            print("Outisde get_k_similar_labels_old")
+            # st.write(len(sim_option))
+            #Calculating the average for every label
+            for i in sim_option:
+                avg[i] = sum(sim_option[i])/len(sim_option[i])
+            #Sorting the dict to get the k most similar labels along with average similarity scores 
+            if option == "Color Moments" or option == "ResNet-Layer3-1024":
+                srt = dict(sorted(avg.items(), key = lambda x: x[1])[:k])
+            else:
+                srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
+            
+            for key, val in srt.items():
+                st.write(get_class_name(key), ": ", val)
 # Function to run for the uploaded image 
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    avg = {}
-    with st.container():
-        #preprocessing the given image
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        opencv_image = cv2.imdecode(file_bytes, 1)
+    with st.spinner('Calculating...'):
+        avg = {}
+        with st.container():
+            #preprocessing the given image
+            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+            opencv_image = cv2.imdecode(file_bytes, 1)
 
-        st.markdown("Query Image")
-        
-        image = cv2.cvtColor(opencv_image,cv2.COLOR_RGB2BGR)
-        image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA)
-        left_co, cent_co,last_co = st.columns(3)
-        with cent_co:
-            st.image(image, channels="BGR")
-        #Getting image data by processing the image
-        imagedata = query_ksimilar_new_label(image)
-        #Calculating the average for every label
-        sim_option = get_ksimilar_labels(imagedata,feature_collection,caltech101,option)
-        st.write(len(sim_option))
-        for i in sim_option:
-            avg[i] = sum(sim_option[i])/len(sim_option[i])
+            st.markdown("Query Image")
+            
+            image = cv2.cvtColor(opencv_image,cv2.COLOR_RGB2BGR)
+            image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA)
+            left_co, cent_co,last_co = st.columns(3)
+            with cent_co:
+                st.image(image, channels="BGR")
+            #Getting image data by processing the image
+            imagedata = query_ksimilar_new_label(image)
+            #Calculating the average for every label
+            sim_option = get_ksimilar_labels(imagedata,feature_collection,caltech101,option)
+            st.write(len(sim_option))
+            for i in sim_option:
+                avg[i] = sum(sim_option[i])/len(sim_option[i])
 
-        #Sorting the dict to get the k most similar labels along with average similarity scores 
-        if option == "Color Moments" or option == "ResNet-Layer3-1024":
-            srt = dict(sorted(avg.items(), key = lambda x: x[1])[:k])
-        else:
-            srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
+            #Sorting the dict to get the k most similar labels along with average similarity scores 
+            if option == "Color Moments" or option == "ResNet-Layer3-1024":
+                srt = dict(sorted(avg.items(), key = lambda x: x[1])[:k])
+            else:
+                srt = dict(sorted(avg.items(), key = lambda x: x[1], reverse=True)[:k])
 
-        for key, val in srt.items():
-            st.write(get_class_name(key), ": ", val)
+            for key, val in srt.items():
+                st.write(get_class_name(key), ": ", val)
 
 else:
     st.write("")

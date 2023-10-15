@@ -34,17 +34,18 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-ProjectPhase2"
+dbName = "CSE515-MWD-ProjectPhase2-Final"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
 
 feature_model = st.selectbox(
         "Select Feature Space",
-        ("Color Moments", "Histograms of Oriented Gradients(HOG)", "ResNet-AvgPool-1024","ResNet-Layer3-1024","ResNet-FC-1000"),
+        ("Color Moments", "Histograms of Oriented Gradients(HOG)", "ResNet-AvgPool-1024","ResNet-Layer3-1024","ResNet-FC-1000","RESNET"),
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
+
 k = st.number_input('Enter k for Top k Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 dimred = st.selectbox(
         "Select Dimensionality Reduction Technique",
@@ -54,7 +55,8 @@ dimred = st.selectbox(
     )
 
 if st.button("Run", type="primary"):
-    with st.container():    
-    	similarity_matrix = ls4(feature_model,k,dimred,similarity_collection)    	
+    with st.spinner('Calculating...'):
+        with st.container():    
+        	similarity_matrix = ls4(feature_model,k,dimred,similarity_collection)    	
 else:
     st.write("")

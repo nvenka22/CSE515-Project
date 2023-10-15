@@ -28,13 +28,20 @@ import scipy.misc
 import tensortools as tt
 from tensortools.operations import unfold as tt_unfold, khatri_rao
 from tensorly import unfold as tl_unfold
+import os
 
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
 from pathlib import Path
 
-
+def load_pickle_file(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as file:
+            data = pickle.load(file)
+        return data
+    else:
+        return None
 
 
 def color_moments_calculator(image):
@@ -443,49 +450,42 @@ def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,simi
 
     return similarity_scores
 
-def manual_svd(X):
-    # Convert X to a NumPy array
-    X = np.array(X)
+def manual_svd(A):
 
-    # Compute covariance matrix
-    cov = np.dot(X.T, X)
+    A = np.array(A)
+    # Compute A*A^T and A^T*A
+    AAT = np.dot(A, A.T)
+    ATA = np.dot(A.T, A)
 
-    # Eigenvalue decomposition of the covariance matrix
-    eigenvalues, eigenvectors = np.linalg.eig(cov)
+    # Compute the eigenvalues and eigenvectors of A*A^T
+    eigenvalues_U, U = np.linalg.eigh(AAT)
 
-    # Replace NaN values with 0
-    eigenvalues = np.nan_to_num(eigenvalues)
-    eigenvectors = np.nan_to_num(eigenvectors)
+    # Sort eigenvectors and eigenvalues in descending order
+    sorted_indices = np.argsort(eigenvalues_U)[::-1]
+    eigenvalues_U = eigenvalues_U[sorted_indices]
+    U = U[:, sorted_indices]
 
-    # Sort eigenvalues and eigenvectors in descending order
-    sorted_indices = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[sorted_indices]
-    eigenvectors = eigenvectors[:, sorted_indices]
+    # Compute the singular values and their inverse from the eigenvalues
+    singular_values = np.sqrt(eigenvalues_U)
+    sigma_inv = 1 / singular_values
 
-    # Compute the singular values and their reciprocals
-    singular_values = np.sqrt(eigenvalues)
-    reciprocals_singular_values = np.where(singular_values != 0, 1/singular_values, 0)
+    # Compute V
+    V = np.dot(U.T, A)
 
-    # Replace NaN values with 0
-    singular_values = np.nan_to_num(singular_values)
-    reciprocals_singular_values = np.nan_to_num(reciprocals_singular_values)
-
-    # Compute U and V matrices
-    U = np.dot(X, eigenvectors)
-    V = np.dot(eigenvectors, np.diag(singular_values))
-
-    # Replace NaN values with 0
-    U = np.nan_to_num(U)
-    V = np.nan_to_num(V)
-
-    return U, V, reciprocals_singular_values
+    return U, V, sigma_inv
 
 def reduce_dimensionality(feature_model, k, technique):
     if technique == 'SVD':
         U, V, sigma_inv = manual_svd(feature_model)
 
+        print(U.shape,V.shape,sigma_inv.shape)
+
         # Take the first k columns of U and V
-        latent_semantics = np.dot(U[:, :k], V[:k, :])
+        latent_semantics = np.dot(U[:, :k], np.dot(np.diag(sigma_inv[:k]), V[:k, :]))
+
+        latent_semantics = latent_semantics[:,:k]
+
+        print("Latent Semantics Shape: "+str(latent_semantics.shape))
 
         return latent_semantics
     elif technique == 'NNMF':
@@ -498,6 +498,9 @@ def reduce_dimensionality(feature_model, k, technique):
         raise ValueError("Invalid dimensionality reduction technique")
 
     latent_semantics = reducer.fit_transform(feature_model)
+
+    print("Latent Semantics Shape: "+str(latent_semantics.shape))
+
     return latent_semantics
 
 def get_top_k_latent_semantics(latent_semantics, k):
@@ -514,68 +517,93 @@ def ls1(feature_model,k,dimred,feature_collection):
     mod_path = Path(__file__).parent.parent
     output_file = str(mod_path)+"/LatentSemantics/"
 
-    feature_descriptors = []
+    try:
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(output_file,feature_collection)
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    feature_descriptors_array = []
 
     if feature_model == "Color Moments":
-        obj = feature_collection.find({},{"color_moments":1})
-        output_file += "latent_semantics_1_color_moments_"+dimred+"_"+str(k)+"_output.pkl"
-        for doc in obj:
-            fetchedarray = doc['color_moments']
-            cmarray = []
 
-            for row in range(0,10):
-                for col in range(0,10):
-                    for channel in fetchedarray[row][col]:
-                        cmarray.append(channel[0])
-                        cmarray.append(channel[1])
-                        cmarray.append(channel[2])
+        output_file += "latent_semantics_1_color_moments_"+str(dimred)+"_"+str(k)+"_output.pkl"
 
-            cmarray = [0 if pd.isna(x) else x for x in cmarray]
-            feature_descriptors.append(cmarray)
-        feature_descriptors = np.array(feature_descriptors)
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(cm_features)
+
+        print(feature_descriptors_array.shape)
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
-        obj = feature_collection.find({},{"hog_descriptor":1})
-        output_file += "latent_semantics_1_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
-        for doc in obj:
-            hogarray = doc['hog_descriptor']
-            hogarray = [0 if pd.isna(x) else x for x in hogarray]
-            feature_descriptors.append(hogarray)
-        feature_descriptors = np.array(feature_descriptors)
+
+        output_file += "latent_semantics_1_hog_"+str(dimred)+"_"+str(k)+"_output.pkl"
+
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(hog_features)
+
+        print(feature_descriptors_array.shape)
 
     elif feature_model == "ResNet-AvgPool-1024":
-        obj = feature_collection.find({},{"avgpool_descriptor":1})
-        output_file += "latent_semantics_1_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
-        for doc in obj:
-            avgpoolarray = doc['avgpool_descriptor']
-            avgpoolarray = [0 if pd.isna(x) else x for x in avgpoolarray]
-            feature_descriptors.append(avgpoolarray)
-        feature_descriptors = np.array(feature_descriptors)
+
+        output_file += "latent_semantics_1_avgpool_"+str(dimred)+"_"+str(k)+"_output.pkl"
+
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(avgpool_features)
+
+        print(feature_descriptors_array.shape)
 
     elif feature_model == "ResNet-Layer3-1024":
-        obj = feature_collection.find({},{"layer3_descriptor":1})
-        output_file += "latent_semantics_1_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
-        for doc in obj:
-            layer3array = doc['layer3_descriptor']
-            layer3array = [0 if pd.isna(x) else x for x in layer3array]
-            feature_descriptors.append(layer3array)
-        feature_descriptors = np.array(feature_descriptors)
+
+        output_file += "latent_semantics_1_layer3_"+str(dimred)+"_"+str(k)+"_output.pkl"
+
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(layer3_features)
+
+        print(feature_descriptors_array.shape)
 
     elif feature_model == "ResNet-FC-1000":
-        obj = feature_collection.find({},{"fc_descriptor":1})
-        output_file += "latent_semantics_1_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
-        for doc in obj:
-            fcarray = doc['fc_descriptor']
-            fcarray = [0 if pd.isna(x) else x for x in fcarray]
-            feature_descriptors.append(fcarray)
-        feature_descriptors = np.array(feature_descriptors)
+
+        output_file += "latent_semantics_1_fc_"+str(dimred)+"_"+str(k)+"_output.pkl"
+
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(fc_features)
+
+        print(feature_descriptors_array.shape)
+
+    elif feature_model == "RESNET":
+
+        output_file += "latent_semantics_1_resnet_"+str(dimred)+"_"+str(k)+"_output.pkl"
+
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(resnet_features)
+
+        print(feature_descriptors_array.shape)
 
     min_max_scaler = p.MinMaxScaler() 
-    feature_descriptors = min_max_scaler.fit_transform(feature_descriptors)
-    latent_semantics = reduce_dimensionality(feature_descriptors, k, dimred)
+    feature_descriptors_array = min_max_scaler.fit_transform(feature_descriptors_array)
+    latent_semantics = reduce_dimensionality(feature_descriptors_array, k, dimred)
     top_k_indices = get_top_k_latent_semantics(latent_semantics, k)
 
-    pickle.dump((top_k_indices, latent_semantics), open(output_file, 'wb+'))
+    pickle.dump((top_k_indices,latent_semantics), open(output_file, 'wb+'))
 
     imageID_weight_pairs = list_imageID_weight_pairs(top_k_indices, latent_semantics)
 
@@ -601,10 +629,10 @@ def get_sim_for_labels(labelx, labely, feature_model, odd_feature_collection, fe
     scores = []
 
     feature_model_map = {"Color Moments": "color_moments", "Histograms of Oriented Gradients(HOG)": "hog_descriptor", 
-                         "ResNet-AvgPool-1024": "avgpool_descriptor","ResNet-Layer3-1024": "layer3_descriptor","ResNet-FC-1000": "fc_descriptor"}
+                         "ResNet-AvgPool-1024": "avgpool_descriptor","ResNet-Layer3-1024": "layer3_descriptor","ResNet-FC-1000": "fc_descriptor", "RESNET":"fc_softmax_descriptor"}
     for x in labelx:
-        sim_scores_for_x = similarity_calculator(x, odd_feature_collection,feature_collection, similarity_collection, dataset)[feature_model_map.get(feature_model)]
-        
+        sim_scores_for_x = similarity_collection.find_one({'_id': x})[feature_model_map.get(feature_model)]
+
         for y in labely:
             scores.append(sim_scores_for_x[str(y)])
     
@@ -613,7 +641,9 @@ def get_sim_for_labels(labelx, labely, feature_model, odd_feature_collection, fe
 def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset):
     labels = [label for label in range(101)]
     
-    label_sim_matrix = np.zeros((101,101))
+    label_sim_matrix = np.nan * np.zeros((101,101))
+    print(label_sim_matrix.shape)
+
     for idx in range(101):
         label_sim_matrix[idx][idx] = 1
 
@@ -622,10 +652,15 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
 
         for labely in labels:
             if labelx == labely: continue
+            if np.isnan(label_sim_matrix[labelx][labely]):
 
-            labely_idx = get_index_for_label(labely, dataset)
-            score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
-            label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labely] = score
+                labely_idx = get_index_for_label(labely, dataset)
+                score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
+                label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labelx] = score
+
+        print("Label Similarities for Label "+str(labelx)+" is of len: "+str(len(label_sim_matrix[labelx]))+" and has values: "+str(label_sim_matrix[labelx]))
+
+    print(label_sim_matrix)
     
     return label_sim_matrix
 
@@ -646,6 +681,23 @@ def list_label_weight_pairs(top_k_indices, latent_semantics):
             with st.expander("Label: "+str(labelID)+" weights:"):
                 st.write(weight.tolist())
             rank+=1
+
+
+def ls3(feature_model, dimred, k, odd_feature_collection, feature_collection, similarity_collection, caltech101):
+
+    mod_path = Path(__file__).parent.parent
+    output_file = str(mod_path)+"/LatentSemantics/"
+
+    ### Creating Label-Label Sim Matx -1
+    sim_matrix = get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, caltech101) ##Labels should be in increasing order
+    ### Dim reduction on Sim matx -2
+    latent_semantics, top_k_indices = get_reduced_dim_labels(sim_matrix, dimred, k) 
+    ### Storing latent Semantics - 3
+    output_file += "latent_semantics_3_"+str(feature_model)+"_"+str(dimred)+"_"+str(k)+"_output.pkl"
+    pickle.dump((top_k_indices,latent_semantics), open(output_file, 'wb+'))
+    ### Listing Label Weight Pairs - 4
+    list_label_weight_pairs(top_k_indices, latent_semantics)
+
 #################################
 def get_class_name(label):
     data = {
@@ -693,7 +745,7 @@ def get_top_k_cp_indices(label_factors, k):
     top_k_indices = np.argsort(-label_factors.sum(axis=1))[:k]
     return top_k_indices
 
-def list_label_weight_pairs(top_k_indices,label_factors):
+def list_label_weight_pairs_cp(top_k_indices,label_factors):
     label_weight_pairs = []
 
     for i in top_k_indices:
@@ -709,6 +761,7 @@ def store_by_feature(output_file,feature_collection):
     avgpool_features =[]
     layer3_features = []
     fc_features = []
+    resnet_features = []
 
     for index in tqdm(range(0,dataset_size,2)):
         doc = feature_collection.find_one({'_id': index})
@@ -753,11 +806,15 @@ def store_by_feature(output_file,feature_collection):
 
         avgpool_features.append(avgpoolarray)
 
+        fetchedarray = doc['layer3_descriptor']
+
         layer3array = [0 if pd.isna(x) else x for x in fetchedarray]
 
         layer3array = np.array(layer3array)
 
         layer3_features.append(layer3array)
+
+        fetchedarray = doc['fc_descriptor']
 
         fcarray = [0 if pd.isna(x) else x for x in fetchedarray]
 
@@ -765,7 +822,15 @@ def store_by_feature(output_file,feature_collection):
 
         fc_features.append(fcarray)
 
-    scipy.io.savemat(output_file+'arrays.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features})  
+        fetchedarray = doc['fc_softmax_descriptor']
+
+        resnetarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        resnetarray = np.array(resnetarray)
+
+        resnet_features.append(resnetarray)
+
+    scipy.io.savemat(output_file+'arrays.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features, 'resnet_features':resnet_features})  
 
 def ls2(feature_model,k,feature_collection):
 
@@ -781,6 +846,7 @@ def ls2(feature_model,k,feature_collection):
         avgpool_features = data['avgpool_features']
         layer3_features = data['layer3_features']
         fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
 
     except scipy.io.matlab.miobase.MatReadError as e:
 
@@ -794,21 +860,19 @@ def ls2(feature_model,k,feature_collection):
         avgpool_features = data['avgpool_features']
         layer3_features = data['layer3_features']
         fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
 
     
 
-    print(type(labels),type(cm_features),type(hog_features),type(avgpool_features),type(layer3_features),type(fc_features))
-    print(np.array(labels).shape,np.array(cm_features).shape,np.array(hog_features).shape,np.array(avgpool_features).shape,np.array(layer3_features).shape,np.array(fc_features).shape)
+    print(type(labels),type(cm_features),type(hog_features),type(avgpool_features),type(layer3_features),type(fc_features),type(resnet_features))
+    print(np.array(labels).shape,np.array(cm_features).shape,np.array(hog_features).shape,np.array(avgpool_features).shape,np.array(layer3_features).shape,np.array(fc_features).shape,np.array(resnet_features).shape)
 
     label = tl.tensor(labels)
     cm_features = tl.tensor(cm_features)
     hog_features = tl.tensor(hog_features)
     layer3_features = tl.tensor(layer3_features)
     fc_features = tl.tensor(fc_features)
-
-    print(type(labels),type(cm_features),type(hog_features),type(avgpool_features),type(layer3_features),type(fc_features))
-    print(np.array(labels).shape,np.array(cm_features).shape,np.array(hog_features).shape,np.array(avgpool_features).shape,np.array(layer3_features).shape,np.array(fc_features).shape)
-
+    resnet_features - tl.tensor(resnet_features)
 
     if feature_model == "Color Moments":
 
@@ -1030,6 +1094,50 @@ def ls2(feature_model,k,feature_collection):
 
         print(label_factors.shape)
 
+    elif feature_model == "RESNET":
+
+        output_file += "latent_semantics_2_resnet_"+str(k)+"_output.pkl"
+
+        num_samples = len(resnet_features)  # Adjust based on your data
+        num_labels = 101
+        descriptor_length = len(resnet_features[0])  # Adjust based on your feature descriptor length
+
+        # Initialize arrays to hold feature descriptors and labels
+        feature_descriptors_array = np.array(resnet_features)
+        labels_array = np.array(labels).reshape(-1, 101, 1)
+
+        print(feature_descriptors_array.shape,labels_array.shape)
+
+        # Stack the arrays to construct the three-modal tensor
+        result_list = []
+
+        # Iterate through each image
+        for i in tqdm(range(4339)):
+            # Extract the feature descriptors and labels for the current image
+            feature_descriptors_image = feature_descriptors_array[i]
+            labels_image = labels_array[i]
+
+            feature_descriptors_image = (feature_descriptors_image - np.mean(feature_descriptors_image)) / np.std(feature_descriptors_image)
+
+            feature_descriptors_image = np.nan_to_num(feature_descriptors_image)
+
+            # Perform the np.multiply.outer operation
+            cp_tensor = np.multiply.outer(feature_descriptors_image, labels_image)
+
+            # Append the result to the list
+            result_list.append(cp_tensor)
+
+        # Convert the list of tensors to a NumPy array
+        result_array = np.array(result_list)
+        cp_tensor = np.squeeze(result_array, axis=3)
+
+        # The resulting array will have shape (4339, 900, 101)
+        print(cp_tensor.shape)
+
+        label_factors = CPDecomposition(cp_tensor,k,max_iter=10)
+
+        print(label_factors.shape)
+
 
     top_k_indices = get_top_k_cp_indices(label_factors, k)
 
@@ -1037,7 +1145,7 @@ def ls2(feature_model,k,feature_collection):
 
     pickle.dump((top_k_indices, label_factors), open(output_file, 'wb+'))
 
-    label_weight_pairs = list_label_weight_pairs(top_k_indices,label_factors)
+    label_weight_pairs = list_label_weight_pairs_cp(top_k_indices,label_factors)
 
     with st.container():
         rank = 1
@@ -1105,6 +1213,16 @@ def ls4(feature_model,k,dimred,similarity_collection):
                 else:
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
 
+    elif feature_model == "RESNET":
+        output_file += "latent_semantics_4_resnet_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        for idx in tqdm(range(0,dataset_size,2)):
+            scores = similarity_collection.find_one({'_id': idx})
+            for cmpidx in range(0,dataset_size,2):
+                if scores['fc_softmax_descriptor'][str(cmpidx)]>1:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1
+                else:
+                    similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_softmax_descriptor'][str(cmpidx)]
+
     similarity_vector = np.array(similarity_matrix).reshape(-1,1)
     #print(similarity_vector.shape)
     latent_semantics = reduce_dimensionality(similarity_matrix, k, dimred)
@@ -1124,16 +1242,172 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
     return similarity_matrix
 
-def get_simlar_ls():
-    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space.")
+def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path)+"/LatentSemantics/"
+    
+    # if feature_model == "Color Moments":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+
+    # elif feature_model == "Histograms of Oriented Gradients(HOG)":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+    # elif feature_model == "ResNet-AvgPool-1024":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+    # elif feature_model == "ResNet-Layer3-1024":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+{dimred}+"_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+       
+    # elif feature_model == "ResNet-FC-1000":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    
+    
+    
+    pkl_file_path+="latent_semantics_3_ResNet-AvgPool-1024_SVD_5_output.pkl"
+    with open(pkl_file_path,'rb') as file:
+        print('File path is '+pkl_file_path)
+        __,pickle_data = pickle.load(file)
+        
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+
+    try:
+
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(output_file,feature_collection)
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+    
+    
+    
+    print('Pickle File Loaded')
+        
+    print(pickle_data.shape)
+    
+    #Calculate 
+    
+    input_image_feature_descriptor = np.array(avgpool_features[idx]).reshape(1, -1)
+    print(input_image_feature_descriptor.shape)
+    print('Features loaded')
+    min_max_scaler = p.MinMaxScaler() 
+    input_image_feature_descriptor = min_max_scaler.fit_transform(input_image_feature_descriptor)
+    print('Reduction started with dimred '+dimred)
+    latent_semantics = reduce_dimensionality(input_image_feature_descriptor, 5, dimred)
+    print('Reduction end')
+    print(latent_semantics.shape)
+    
+    
+    
 def get_simlar_ls_img() :
     print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+    
 def get_simlar_ls_label():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
 def get_simlar_ls_label_img():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
-def get_simlar_ls__by_label():
-    print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
+
+def get_simlar_ls__by_label(lbl, latsem, feature_model, k):
+    #print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
+
+    # Specify the path to your pickle file
+
+    """#Latent Semantics 1
+    if(latsem=="LS1"):
+        if(feature_model=="Color Moments"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="Histograms of Oriented Gradients(HOG)"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-AvgPool-1024"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-Layer3-1024"):
+=======
+    #Latent Semantics 1
+    if(latsem=="LS1"):
+        if(feature_model=="Color Moments"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-AvgPool-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-Layer3-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-FC-1000")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="RESNET")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+
+
+    #Latent Semantics 2
+    elif(latsem=="LS2"):
+        if(feature_model=="Color Moments"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-AvgPool-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-Layer3-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-FC-1000")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="RESNET")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+
+    #Latent Semantics 3        
+    elif(latsem=="LS3"):
+        if(feature_model=="Color Moments"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-AvgPool-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-Layer3-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-FC-1000")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="RESNET")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+
+    #Latent Semantics 4
+    elif(latsem=="LS4"):
+        if(feature_model=="Color Moments"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-AvgPool-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-Layer3-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-FC-1000")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="RESNET")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+
+    # Open the pickle file in binary read mode ('rb')
+    with open(pickle_file_path, 'rb') as file:
+        # Use pickle.load() to read the data from the file
+        loaded_data = pickle.load(file)"""
+
 def get_simlar_ls__by_label_img():
     print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
 def get_simlarlabel_byimg_ls():

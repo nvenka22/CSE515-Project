@@ -2,11 +2,11 @@
 
 .DS_Store
 
-/caltech101/
+caltech101/
 
 Phase1/.ipynb_checkpoints/
 
-Phase2/LatentSemantics
+Phase2/LatentSemantics/arrays.mat
 
 .vscode/*    
 !.vscode/settings.json
