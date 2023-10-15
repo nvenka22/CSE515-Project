@@ -58,7 +58,7 @@ def cosine_similarity_calculator(descriptor1, descriptor2, normalize=True):
     if normalize:
         descriptor1 = featurenormalize(descriptor1)
         descriptor2 = featurenormalize(descriptor2)
-    
+        
     # Reshape descriptors as needed
     descriptor1 = np.reshape(descriptor1, (1, -1))
     descriptor2 = np.reshape(descriptor2, (1, -1))
