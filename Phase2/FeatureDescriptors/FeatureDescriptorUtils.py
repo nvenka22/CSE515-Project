@@ -1318,9 +1318,56 @@ def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
     print(latent_semantics.shape)
     
     
+def get_latent_semantics(dimred):
+    file_path = "Phase2/LatentSemantics/"
+    for file in os.listdir(file_path):
+        if file.startswith("latent_semantics_1_") and dimred in file:
+            return pickle.load(open(file, "rb")), file
+        
+def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
+    scores = []
+    sim_score_method = {"color_moments": similarity_score_color_moments, "hog_descriptor": similarity_score_hog,
+                        "avgpool_descriptor": similarity_score_avgpool, "layer3_descriptor": similarity_score_layer3,
+                        "fc_descriptor": similarity_score_fc, "fc_softmax_descriptor": get_similarity_score_resnet}
     
-def get_simlar_ls_img() :
-    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+    for ls in latent_semantics[1]:
+        scores.append(sim_score_method[feature_model](query_ls, latent_semantics))
+    
+    index =  np.argsort(scores)[::-1][:k]
+    scores = [latent_semantics[idx] for idx in index]
+
+    return index, scores
+
+def get_simlar_ls(idx, k, dimred, odd_feature_collection, feature_collection):
+    latent_semantics, file = get_latent_semantics(dimred)
+    file = file.split("_")
+    n_components, fd = file[-2], "fc_softmax_descriptor" if file[3] == "resnet" else file[3]+"_"+file[4] ### Parsing the filename to get the n and fd 
+    query_ls = None
+    if idx%2==0:
+        query_ls = latent_semantics[1][idx//2]
+    else:
+        imagedata = odd_feature_collection.find_one({'_id': idx})[fd]
+        query_ls = reduce_dimensionality(imagedata, n_components, dimred)
+    
+    top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, fd)
+    k_similar = {str(idx): score for idx, score in zip(top_k_index, scores)}
+    ### Display Images and Score
+    show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+
+
+
+def get_simlar_ls_img(imagedata, k, dimred, feature_collection):
+    latent_semantics, file = get_latent_semantics(dimred)
+    file = file.split("_")
+    n_components, fd = file[-2], "fc_softmax_descriptor" if file[3] == "resnet" else file[3]+"_"+file[4] ### Parsing the filename to get the n and fd 
+    
+    query_ls = get_reduced_dim_labels(imagedata[fd], dimred, n_components)
+    top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, fd)
+    k_similar = {str(idx): score for idx, score in zip(top_k_index, scores)}
+    
+    ### Display Images and Score
+    show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+    
     
 def get_simlar_ls_label():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
