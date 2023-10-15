@@ -34,7 +34,7 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-ProjectPhase2"
+dbName = "CSE515-MWD-ProjectPhase2-Final"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
@@ -51,22 +51,24 @@ option = st.selectbox(
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary") and uploaded_file is None:
-    with st.container():    
-        queryksimilar(idx, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
+    with st.spinner('Calculating...'):
+        with st.container():    
+            queryksimilar(idx, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    with st.container():
-        
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        opencv_image = cv2.imdecode(file_bytes, 1)
+    with st.spinner('Calculating...'):
+        with st.container():
+            
+            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+            opencv_image = cv2.imdecode(file_bytes, 1)
 
-        st.markdown("Query Image")
-        
-        image = cv2.cvtColor(opencv_image,cv2.COLOR_RGB2BGR)
-        image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA)
-        left_co, cent_co,last_co = st.columns(3)
-        with cent_co:
-            st.image(image, channels="BGR")
-        
-        queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
+            st.markdown("Query Image")
+            
+            image = cv2.cvtColor(opencv_image,cv2.COLOR_RGB2BGR)
+            image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA)
+            left_co, cent_co,last_co = st.columns(3)
+            with cent_co:
+                st.image(image, channels="BGR")
+            
+            queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,similarity_collection,caltech101,option)
 else:
     st.write("")

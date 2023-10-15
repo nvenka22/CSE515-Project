@@ -34,7 +34,7 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-ProjectPhase2"
+dbName = "CSE515-MWD-ProjectPhase2-Final"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
@@ -51,10 +51,12 @@ dimred = st.selectbox(
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary"):
-    with st.container():    
-    	get_simlar_ls()    	
+    with st.spinner('Calculating...'):
+        with st.container():    
+        	get_simlar_ls()    	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    with st.container():    
-        get_simlar_ls_img()     
+    with st.spinner('Calculating...'):
+        with st.container():    
+            get_simlar_ls_img()     
 else:
     st.write("")
