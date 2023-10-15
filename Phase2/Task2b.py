@@ -32,15 +32,12 @@ def get_similar_resnet(query_image_features, feature_collection, dataset):
     sim_la = {}
 
     for cmpidx in tqdm(range(0,len(dataset),2)):
+          
         imagedata2 = feature_collection.find_one({"_id": cmpidx})
         image = np.array(imagedata2['image'], dtype=np.uint8)
         label = imagedata2["label"]
         image_features = fc_calculator_2(image)
-
-        dot_product = np.dot(query_image_features, image_features)
-        norm1 = np.linalg.norm(query_image_features)
-        norm2 = np.linalg.norm(image_features)
-        similarity = dot_product / (norm1 * norm2)
+        similarity = get_similarity_score_resnet(query_image_features, image_features)
 
         if label in sim_la:
             sim_la[label].append(similarity)
@@ -58,7 +55,7 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
-dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
+dbName = "CSE515-MWD-ProjectPhase2"
 odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
