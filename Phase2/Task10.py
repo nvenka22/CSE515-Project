@@ -48,13 +48,10 @@ dimred = st.selectbox(
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
-uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary"):
     with st.container():    
     	get_simlarlabel_by_img_ls()    	
-elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    with st.container():    
-        get_simlarlabel_by_img_ls_img()     
+
 else:
     st.write("")

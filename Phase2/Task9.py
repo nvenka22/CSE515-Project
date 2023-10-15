@@ -55,7 +55,7 @@ feature_model = st.selectbox(
         disabled=st.session_state.disabled,
     )
 
-if(latsem=='LS1'):
+if(latsem!='LS2'):
     dimred = st.selectbox(
         "Select Dimensionality Reduction Technique",
         ("SVD", "NNMF", "LDA","k-Means"),
@@ -63,15 +63,11 @@ if(latsem=='LS1'):
         disabled=st.session_state.disabled,
     )
 
-k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
-
-uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
+k = st.number_input('Enter k for similar labels',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
 if st.button("Run", type="primary"):
     with st.container():    
     	get_simlar_ls__by_label(lbl, latsem, k)    	
-elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    with st.container():    
-        get_simlar_ls__by_label_img()     
+ 
 else:
     st.write("")
