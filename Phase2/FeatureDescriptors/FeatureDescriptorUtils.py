@@ -648,7 +648,7 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
         label_sim_matrix[idx][idx] = 1
 
     for labelx in tqdm(labels):
-        labelx_idx = get_index_for_label(labelx, dataset)
+        """labelx_idx = get_index_for_label(labelx, dataset)
 
         for labely in labels:
             if labelx == labely: continue
@@ -656,7 +656,13 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
 
                 labely_idx = get_index_for_label(labely, dataset)
                 score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
-                label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labelx] = score
+                label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labelx] = score"""
+
+        labelx_similarity_scores = similarity_calculator_by_label(labelx,feature_model,100,odd_feature_collection,feature_collection,similarity_collection,dataset,True)
+
+        for labely in range(101):
+            label_sim_matrix[labelx][labely] = labelx_similarity_scores[str(labelx)][str(labely)]
+            #print("Similarities for label "+str(label)+": "+str(label_sim_matrix[labelx]))
 
     print(label_sim_matrix)
     
