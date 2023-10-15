@@ -40,7 +40,6 @@ feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
 
 idx = st.number_input('Enter ImageID',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
-k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
 latsem = st.selectbox(
     "Select the latent semantics",
@@ -56,19 +55,23 @@ feature_model = st.selectbox(
         disabled=st.session_state.disabled,
     )
 
-if(latsem!='LS2'):
+latentk = st.number_input('Enter k for Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
+
+if latsem!="LS2":
     dimred = st.selectbox(
-        "Select Dimensionality Reduction Technique",
-        ("SVD", "NNMF", "LDA","k-Means"),	
-        label_visibility=st.session_state.visibility,
-        disabled=st.session_state.disabled,
-    )
+            "Select Dimensionality Reduction Technique",
+            ("SVD", "NNMF", "LDA","k-Means"),
+            label_visibility=st.session_state.visibility,
+            disabled=st.session_state.disabled,
+        )
+else:
+    dimred = ""
 
-
+k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
-if st.button("Run", type="primary"):
+if st.button("Run", type="primary") and uploaded_file is None:
     with st.spinner('Calculating...'):
         with st.container():    
             if idx%2 == 0:
@@ -77,10 +80,10 @@ if st.button("Run", type="primary"):
                 imagedata1 = odd_feature_collection.find_one({'_id': idx})
             image = np.array(imagedata1['image'], dtype=np.uint8)
             st.image(image, channels="BGR")
-            get_similar_ls(idx,latsem, feature_model, dimred,k,None,feature_collection)    	
+            get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,None,feature_collection)    	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():    
-            get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file,feature_collection)     
+            get_similar_ls(idx,latsem, feature_model, latentk, dimred,k,uploaded_file,feature_collection)     
 else:
     st.write("")

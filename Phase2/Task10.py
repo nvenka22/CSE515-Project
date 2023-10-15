@@ -40,14 +40,26 @@ feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
 
 lbl = st.number_input('Enter Label number',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
+
+latsem = st.selectbox(
+    "Select the latent semantics",
+    ("LS1","LS2","LS3","LS4"),
+    label_visibility=st.session_state.visibility,
+    disabled=st.session_state.disabled,
+    )
+
+latentk = st.number_input('Enter k for Latent Semantics',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
+
+if latsem!="LS2":
+    dimred = st.selectbox(
+            "Select Dimensionality Reduction Technique",
+            ("SVD", "NNMF", "LDA","k-Means"),
+            label_visibility=st.session_state.visibility,
+            disabled=st.session_state.disabled,
+        )
+
 k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
-dimred = st.selectbox(
-        "Select Dimensionality Reduction Technique",
-        ("SVD", "NNMF", "LDA","k-Means"),
-        label_visibility=st.session_state.visibility,
-        disabled=st.session_state.disabled,
-    )
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary"):
@@ -57,6 +69,6 @@ if st.button("Run", type="primary"):
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():    
-            get_simlarlabel_by_img_ls_img()     
+            task10(lbl,latentk,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)     
 else:
     st.write("")
