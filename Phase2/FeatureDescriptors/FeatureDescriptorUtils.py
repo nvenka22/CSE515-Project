@@ -1124,14 +1124,49 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
     return similarity_matrix
 
-def get_simlar_ls():
-    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space.")
+def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path)+"/LatentSemantics/"
+    
+    if feature_model == "Color Moments":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+{dimred}+"_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+       
+    elif feature_model == "ResNet-FC-1000":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    
+    
+    
+    with open(pkl_file_path,'rb') as file:
+        pickle_data = pickle.load(file)
+    
+    print('Pickle File Loaded')
+        
+    print(len(pickle_data))
+                
+    
+    
+    
 def get_simlar_ls_img() :
     print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+    
 def get_simlar_ls_label():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
-def get_simlar_ls_label_img():
-    print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
+    
+    
+    
 def get_simlar_ls__by_label():
     print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
 def get_simlar_ls__by_label_img():
