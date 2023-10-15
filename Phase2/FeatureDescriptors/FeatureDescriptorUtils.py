@@ -1242,10 +1242,86 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
     return similarity_matrix
 
-def get_simlar_ls():
-    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space.")
+def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path)+"/LatentSemantics/"
+    
+    # if feature_model == "Color Moments":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+
+    # elif feature_model == "Histograms of Oriented Gradients(HOG)":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+    # elif feature_model == "ResNet-AvgPool-1024":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_avgpool_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+        
+
+    # elif feature_model == "ResNet-Layer3-1024":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+{dimred}+"_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+       
+    # elif feature_model == "ResNet-FC-1000":
+    #     pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_{dimred}_"+str(k)+"_output.pkl".format(dimred="" if latsem[2] == "2" else latsem[2])
+    
+    
+    
+    pkl_file_path+="latent_semantics_3_ResNet-AvgPool-1024_SVD_5_output.pkl"
+    with open(pkl_file_path,'rb') as file:
+        print('File path is '+pkl_file_path)
+        __,pickle_data = pickle.load(file)
+        
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+
+    try:
+
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(output_file,feature_collection)
+
+        data = scipy.io.loadmat(output_file+'arrays.mat')
+
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+    
+    
+    
+    print('Pickle File Loaded')
+        
+    print(pickle_data.shape)
+    
+    #Calculate 
+    
+    input_image_feature_descriptor = np.array(avgpool_features[idx]).reshape(1, -1)
+    print(input_image_feature_descriptor.shape)
+    print('Features loaded')
+    min_max_scaler = p.MinMaxScaler() 
+    input_image_feature_descriptor = min_max_scaler.fit_transform(input_image_feature_descriptor)
+    print('Reduction started with dimred '+dimred)
+    latent_semantics = reduce_dimensionality(input_image_feature_descriptor, 5, dimred)
+    print('Reduction end')
+    print(latent_semantics.shape)
+    
+    
+    
 def get_simlar_ls_img() :
     print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+    
 def get_simlar_ls_label():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
 def get_simlar_ls_label_img():
