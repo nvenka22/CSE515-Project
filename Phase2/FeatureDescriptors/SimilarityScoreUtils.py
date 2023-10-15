@@ -58,7 +58,7 @@ def cosine_similarity_calculator(descriptor1, descriptor2, normalize=True):
     if normalize:
         descriptor1 = featurenormalize(descriptor1)
         descriptor2 = featurenormalize(descriptor2)
-    
+        
     # Reshape descriptors as needed
     descriptor1 = np.reshape(descriptor1, (1, -1))
     descriptor2 = np.reshape(descriptor2, (1, -1))
@@ -198,9 +198,9 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
     
     return similarities
 
-def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
+def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset,fortask5 = False):
     
-    print("Entry similarity_calculator_by_label")
+    print("Entry similarity_calculator_by_label for: "+str(label))
     image_data_by_label = feature_collection.find({'label':label})
     final_scores = []
     
@@ -212,8 +212,8 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         similarity_calculator(doc['_id'], odd_feature_collection, feature_collection, similarity_collection, dataset)
         
         
-    print('The required indices for this label are')
-    print(required_indices_for_label)
+    #print('The required indices for this label are')
+    #print(required_indices_for_label)
 
     if feature_space == "Color Moments":
         feature_space = "color_moments"
@@ -241,7 +241,7 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
             required_scores.append(image_similarity_scores[feature_space][str(dct_idx)])
        # print(required_scores)
         required_scores =[1 if x>1 else x for x in required_scores]
-        print(required_scores)
+        #print(required_scores)
         avg_score=statistics.mean(required_scores)
         imagedata = feature_collection.find_one({'_id': index})
         final_data={'imageId':imagedata['_id'],'image':cv2.cvtColor(np.array(imagedata['image'], dtype=np.uint8), cv2.COLOR_BGR2RGB),'average_score':avg_score}
@@ -249,6 +249,12 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     
     #To test the output stream
     #st.write(final_scores)
+
+    if fortask5 == True:
+
+        label_label_similarities  =final_scores
+        
+        return label_label_similarities  #Returning for task 5 func
     
     #Sort the result dict to retrieve top k results
     final_scores = sorted(final_scores, key = lambda x: x['average_score'],reverse=True)[:k]
