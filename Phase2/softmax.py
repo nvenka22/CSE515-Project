@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 13 18:56:48 2023
-
-@author: nikhilvr
-"""
 import pymongo
 from pymongo import MongoClient
 from numba import njit 
@@ -74,13 +67,13 @@ if __name__=="__main__":
     caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 
 
-    dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
+    dbName = "CSE515-MWD-ProjectPhase2"
     odd_feature_collection = connect_to_db(dbName,'image_features_odd')
     feature_collection = connect_to_db(dbName,'image_features')
     similarity_collection = connect_to_db(dbName,'image_similarities')
 
     transferclient = MongoClient('192.168.0.5',27017)
-    transferdb = transferclient["CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2"]
+    transferdb = transferclient["CSE515-MWD-ProjectPhase2"]
     trasnfercollection = transferdb['image_similarities']
 
 
