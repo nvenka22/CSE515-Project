@@ -1242,7 +1242,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
     return similarity_matrix
 
-def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
+def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file,feature_collection):
     mod_path = Path(__file__).parent.parent
     pkl_file_path = str(mod_path)+"/LatentSemantics/"
     
@@ -1267,7 +1267,7 @@ def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
     
     
     
-    pkl_file_path+="latent_semantics_3_ResNet-AvgPool-1024_SVD_5_output.pkl"
+    pkl_file_path+="latent_semantics_4_layer3_descriptor_LDA_5_output.pkl"
     with open(pkl_file_path,'rb') as file:
         print('File path is '+pkl_file_path)
         __,pickle_data = pickle.load(file)
@@ -1287,9 +1287,9 @@ def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
 
     except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
 
-        store_by_feature(output_file,feature_collection)
+        store_by_feature(mat_file_path,feature_collection)
 
-        data = scipy.io.loadmat(output_file+'arrays.mat')
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
 
         labels = data['labels']
         cm_features = data['cm_features']
@@ -1305,17 +1305,52 @@ def get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file):
         
     print(pickle_data.shape)
     
-    #Calculate 
+    #Calculate Feature Descriptor for input image and reduce dimensions
     
-    input_image_feature_descriptor = np.array(avgpool_features[idx]).reshape(1, -1)
+    input_image_feature_descriptor = np.array(layer3_features[int(idx/2)]).reshape(1, -1)
     print(input_image_feature_descriptor.shape)
-    print('Features loaded')
-    min_max_scaler = p.MinMaxScaler() 
-    input_image_feature_descriptor = min_max_scaler.fit_transform(input_image_feature_descriptor)
+    print("Input before reshaping:")
+    print(input_image_feature_descriptor)
+    #min_max_scaler = p.MinMaxScaler() 
+    #input_image_feature_descriptor = min_max_scaler.fit_transform(input_image_feature_descriptor)
+    #print("Input feature descriptor:")
+    #print(input_image_feature_descriptor)
     print('Reduction started with dimred '+dimred)
-    latent_semantics = reduce_dimensionality(input_image_feature_descriptor, 5, dimred)
+    latent_semantics_input_image = reduce_dimensionality(input_image_feature_descriptor, 5, dimred)
     print('Reduction end')
-    print(latent_semantics.shape)
+    print(latent_semantics_input_image.shape)
+    
+    #Compare LS vectors with every other image
+    
+    if(latsem == 'LS1' or latsem == 'LS4'):
+        get_ls_similar_labels_image_weighted(pickle_data,latent_semantics_input_image, k)
+        
+    
+    else:
+        get_ls_similar_labels_label_weighted(pickle_data, latent_semantics_input_image, k)
+        
+
+
+def get_ls_similar_labels_label_weighted(pickle_data, latent_semantics_input_image, k):
+    
+    sim_la = {}
+    for i in range(0,101):
+        sim_la[i] = cosine_similarity_calculator(np.array(pickle_data[i]),latent_semantics_input_image)
+        print(sim_la[i])
+    
+    sim_la = dict(sorted(sim_la.items(), key = lambda x: x[1] , reverse = True)[:k])
+    
+    #print top k matching labels
+    for key, val in sim_la.items():
+        st.write(get_class_name(key), ": ", val)
+        
+
+        
+        
+    
+    
+    
+    
     
     
     

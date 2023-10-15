@@ -71,10 +71,16 @@ uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'j
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	get_similar_ls(idx,latsem, feature_model, dimred,k,None)    	
+            if idx%2 == 0:
+                imagedata1 = feature_collection.find_one({'_id': idx})
+            else:
+                imagedata1 = odd_feature_collection.find_one({'_id': idx})
+            image = np.array(imagedata1['image'], dtype=np.uint8)
+            st.image(image, channels="BGR")
+            get_similar_ls(idx,latsem, feature_model, dimred,k,None,feature_collection)    	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():    
-            get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file)     
+            get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file,feature_collection)     
 else:
     st.write("")
