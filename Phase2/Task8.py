@@ -71,10 +71,10 @@ uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'j
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	get_simlar_ls_label()    	
+        	get_similar_ls(idx,latsem, feature_model, dimred,k,None)    	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():    
-            get_simlar_ls_label_img()     
+            get_similar_ls(idx,latsem, feature_model, dimred,k,uploaded_file)     
 else:
     st.write("")
