@@ -48,6 +48,13 @@ latsem = st.selectbox(
     disabled=st.session_state.disabled,
     )
 
+feature_model = st.selectbox(
+        "Select Feature Space",
+        ("Color Moments", "Histograms of Oriented Gradients(HOG)", "ResNet-AvgPool-1024","ResNet-Layer3-1024","ResNet-FC-1000", "RESNET"),
+        label_visibility=st.session_state.visibility,
+        disabled=st.session_state.disabled,
+    )
+
 latentk = st.number_input('Enter k for Latent Semantics',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
 
 if latsem!="LS2":
@@ -57,6 +64,7 @@ if latsem!="LS2":
             label_visibility=st.session_state.visibility,
             disabled=st.session_state.disabled,
         )
+else: dimred = ""
 
 k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
@@ -65,10 +73,10 @@ uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'j
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	get_simlarlabel_by_img_ls()    	
+        	task10(lbl,latentk,feature_model,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)  	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():    
-            task10(lbl,latentk,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)     
+            task10(lbl,latentk,feature_model,dimred,latsem,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)     
 else:
     st.write("")
