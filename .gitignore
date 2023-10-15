@@ -2,17 +2,18 @@
 
 .DS_Store
 
-/caltech101/
+caltech101/
 
 Phase1/.ipynb_checkpoints/
 
-Phase2/LatentSemantics
+Phase2/LatentSemantics/arrays.mat
 
 .vscode/*    
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+!.vscode/launch.json
 
 MongoTransfer.py
 MongoCounter.py
