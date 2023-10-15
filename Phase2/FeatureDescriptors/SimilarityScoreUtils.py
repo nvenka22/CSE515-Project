@@ -198,7 +198,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
     
     return similarities
 
-def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset,fortask5 = False):
+def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,feature_collection,similarity_collection,dataset):
     
     print("Entry similarity_calculator_by_label for: "+str(label))
     image_data_by_label = feature_collection.find({'label':label})
@@ -249,12 +249,6 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     
     #To test the output stream
     #st.write(final_scores)
-
-    if fortask5 == True:
-
-        label_label_similarities  =final_scores
-        
-        return label_label_similarities  #Returning for task 5 func
     
     #Sort the result dict to retrieve top k results
     final_scores = sorted(final_scores, key = lambda x: x['average_score'],reverse=True)[:k]
@@ -272,8 +266,6 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         
     #print("The lengths are :")
     #print(str(len(display_images_list))+" "+str(len(display_indices))+" "+str(len(display_similarity_scores)))
-    
-    
         
     #Call display method for final output
     
@@ -319,29 +311,3 @@ def get_similarity_score_resnet(query_image_features,image_features):
     similarity = dot_product / (norm1 * norm2)
     
     return similarity
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
