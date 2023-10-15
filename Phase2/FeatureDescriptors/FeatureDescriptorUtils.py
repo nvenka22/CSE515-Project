@@ -632,7 +632,7 @@ def get_sim_for_labels(labelx, labely, feature_model, odd_feature_collection, fe
                          "ResNet-AvgPool-1024": "avgpool_descriptor","ResNet-Layer3-1024": "layer3_descriptor","ResNet-FC-1000": "fc_descriptor", "RESNET":"fc_softmax_descriptor"}
     for x in labelx:
         sim_scores_for_x = similarity_collection.find_one({'_id': x})[feature_model_map.get(feature_model)]
-        
+
         for y in labely:
             scores.append(sim_scores_for_x[str(y)])
     
@@ -643,6 +643,7 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
     
     label_sim_matrix = np.nan * np.zeros((101,101))
     print(label_sim_matrix.shape)
+
     for idx in range(101):
         label_sim_matrix[idx][idx] = 1
 
@@ -1262,6 +1263,16 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, k):
         elif(feature_model=="ResNet-AvgPool-1024"):
             pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
         elif(feature_model=="ResNet-Layer3-1024"):
+=======
+    #Latent Semantics 1
+    if(latsem=="LS1"):
+        if(feature_model=="Color Moments"):
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-AvgPool-1024")
+            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+        elif(feature_model=="ResNet-Layer3-1024")
             pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
         elif(feature_model=="ResNet-FC-1000")
             pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'

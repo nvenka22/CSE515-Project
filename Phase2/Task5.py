@@ -8,7 +8,11 @@ if "visibility" not in st.session_state:
     st.session_state.visibility = "visible"
     st.session_state.disabled = False
 
+<<<<<<< HEAD
 dbName = "CSE515-MWD-ProjectPhase2-Final"
+=======
+dbName = "CSE515-MWD-ProjectPhase2"
+>>>>>>> e6f1a162ecfe7ca27ed9b77e764d33da3f61536f
 mod_path = Path(__file__).parent.parent
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 
@@ -36,6 +40,5 @@ dimred = st.selectbox(
 if st.button("Run", type="primary"):
 
     with st.spinner('Calculating...'):
-        with st.container():
-        
+        with st.container():        
             ls3(feature_model, dimred, k, odd_feature_collection, feature_collection, similarity_collection, caltech101)

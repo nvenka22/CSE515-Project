@@ -68,9 +68,10 @@ k = st.number_input('Enter k for similar images',placeholder="Type a number...",
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary"):
-    with st.spinner('Calculating...'):\
+    with st.spinner('Calculating...'):
         with st.container():    
         	get_simlar_ls__by_label(lbl, latsem, k)    
+            
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():    
