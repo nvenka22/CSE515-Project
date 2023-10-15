@@ -55,6 +55,8 @@ feature_model = st.selectbox(
         disabled=st.session_state.disabled,
     )
 
+latentk = st.number_input('Enter k for Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
+
 if(latsem!='LS2'):
     dimred = st.selectbox(
         "Select Dimensionality Reduction Technique",
@@ -62,17 +64,20 @@ if(latsem!='LS2'):
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
+else:
+    dimred = ""
 
 k = st.number_input('Enter k for similar labels',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	get_simlar_ls__by_label(lbl, latsem, k)    
-            
-elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    with st.spinner('Calculating...'):
-        with st.container():    
-            get_simlar_ls__by_label_img()     
+        	top_k_labels = get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feature_collection)
+
+            #print top k matching labels
+            for key, val in top_k_labels.items():
+                st.write(get_class_name(key), ": ", val)
+            st.write("")    
+              
 else:
     st.write("")
