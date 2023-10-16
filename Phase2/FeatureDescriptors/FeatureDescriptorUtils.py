@@ -1656,7 +1656,7 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
     image_data_by_label = feature_collection.find({'label':label})
 
     final_scores = []
-    
+
     required_indices_for_label = []
     labels_array = []
     
@@ -1691,9 +1691,113 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
             similarity_label_scores[imglabel].append(similarity_image_scores[index])
 
     return similarity_image_scores,similarity_label_scores
+
+def get_features_from_mat(data, feature_model):
     
-def get_simlar_ls_img() :
-    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+    if "color" in feature_model or "cm" in feature_model: return data["cm_features"]
+    elif "hog" in feature_model: return data["hog_features"]
+    elif "avgpool" in feature_model: return data["avgpool_features"]
+    elif "layer3" in feature_model: return data["layer3_features"]
+    elif "fc" in feature_model: return data["fc_features"]
+    elif "resnet" in feature_model: return data["resnet_features"]
+        
+    
+def get_latent_semantics(dimred, feature_model):
+    file_path = "Phase2/LatentSemantics/"
+
+    for file in os.listdir(file_path):
+        if file.startswith("latent_semantics_1_") and feature_model in file and dimred in file:
+            print(file)
+            return pickle.load(open(file_path+file, "rb")), file
+
+    raise FileExistsError()        
+
+
+        
+def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
+    scores = []
+    sim_score_method = {"color_moments": similarity_score_color_moments, "hog_descriptor": similarity_score_hog,
+                        "avgpool_descriptor": similarity_score_avgpool, "layer3_descriptor": similarity_score_layer3,
+                        "fc_descriptor": similarity_score_fc, "resnet": get_similarity_score_resnet}
+    
+    for ls in latent_semantics[1]:
+        score = sim_score_method[feature_model](query_ls, ls)
+        if "layer3" in feature_model or "color" in feature_model:
+            score = 1-score
+        scores.append(score)
+    
+    index =  np.argsort(scores)[::-1][:k]
+    scores = [scores[idx] for idx in index]
+
+    return index, scores
+
+def get_simlar_ls(idx, feature_model, k, dimred, odd_feature_collection, feature_collection, dataset):
+    latent_semantics, file = get_latent_semantics(dimred, feature_model)
+    file = file.split("_")
+    n_components= int(file[-2])
+    query_ls = None
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+    data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+
+
+    if idx%2==0:
+        query_ls = latent_semantics[1][idx//2]
+        _imagedata = feature_collection.find_one({'_id': idx})
+
+    else:
+        _imagedata = odd_feature_collection.find_one({"_id": idx})
+        if feature_model == "resnet":
+            image = np.array(_imagedata['image'], dtype=np.uint8)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA) 
+            image = np.array(image)
+            odd_feature = fc_calculator_2(image).reshape(1,-1)
+        
+        else:
+            odd_feature = np.array(_imagedata[feature_model]).reshape(1,-1)
+        ####getfeaturesforodd
+        features = get_features_from_mat(data, feature_model)
+        mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+        query_ls = reduce_dimensionality(mixed_feature_descriptors, n_components, dimred)[0]
+
+
+    top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
+    k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
+    ### Display Images and Score
+    
+    image = np.array(_imagedata['image'], dtype=np.uint8)
+    display_image_centered(np.array(image),str(idx))
+    show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+
+
+
+def get_simlar_ls_img(imagedata, feature_model,k, dimred, feature_collection):
+    latent_semantics, file = get_latent_semantics(dimred, feature_model)
+    file = file.split("_")
+    n_components = int(file[-2])
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+    data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+
+    if feature_model == "resnet":
+        odd_feature = fc_calculator_2(np.array(imagedata["image"], dtype=np.uint8)).reshape(1,-1)
+
+    else:
+        odd_feature = np.array(imagedata[feature_model]).reshape(1,-1)
+
+    features = get_features_from_mat(data, feature_model)
+    mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+    query_ls = reduce_dimensionality(mixed_feature_descriptors, n_components, dimred)[0]
+
+    top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
+    k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
+    
+    ### Display Images and Score
+    show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+    
+    
     
 def get_simlar_ls_label():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
