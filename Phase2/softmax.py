@@ -1,5 +1,11 @@
-import pymongo
-from pymongo import MongoClient
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Oct 13 18:56:48 2023
+
+@author: nikhilvr
+"""
+
 from numba import njit 
 import os
 import cv2
@@ -62,25 +68,32 @@ def calc_sim_score_softmax(startIndex,endIndex,feature_collection,similarity_col
     print('Exit calc_sim_score_softmax')
     
 
+def check_and_calc_softmax(startIndex,endIndex,feature_collection,similarity_collection):
+    for idx in tqdm(range(startIndex,endIndex,2)):
+        similarity_scores = feature_collection.find_one({"_id": idx})
+        if('fc_softmax_descriptor' not in similarity_scores):
+            print('Not present in DB, calculating for '+str(idx))
+            calc_sim_score_softmax(idx, idx+1, feature_collection, similarity_collection)
+        
+        else:
+            
+    
+    
+
 if __name__=="__main__": 
     mod_path = Path(__file__).parent.parent
     caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
 
 
-    dbName = "CSE515-MWD-ProjectPhase2"
+    dbName = "CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2"
     odd_feature_collection = connect_to_db(dbName,'image_features_odd')
     feature_collection = connect_to_db(dbName,'image_features')
     similarity_collection = connect_to_db(dbName,'image_similarities')
 
-    transferclient = MongoClient('192.168.0.5',27017)
-    transferdb = transferclient["CSE515-MWD-ProjectPhase2"]
-    trasnfercollection = transferdb['image_similarities']
 
 
-
-    processes = [Process(target = calc_sim_score_softmax,args = (idx,idx+500,feature_collection,trasnfercollection)) for idx in range(3000,6000,250)]
+    processes = [Process(target = calc_sim_score_softmax,args = (idx,idx+500,feature_collection,similarity_collection)) for idx in range(0,3000,250)]
     
-    #calc_feature_desc_softmax(0,8677,caltech101,feature_collection)
     
     print("Threads Running")
     for p in processes:

@@ -17,3 +17,5 @@ Phase2/LatentSemantics/arrays.mat
 
 MongoTransfer.py
 MongoCounter.py
+
+Phase2/resnet_results/*.json

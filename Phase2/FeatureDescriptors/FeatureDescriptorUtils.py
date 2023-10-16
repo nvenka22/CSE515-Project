@@ -848,7 +848,7 @@ def ls2(feature_model,k,feature_collection):
         fc_features = data['fc_features']
         resnet_features = data['resnet_features']
 
-    except scipy.io.matlab.miobase.MatReadError as e:
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
 
         store_by_feature(output_file,feature_collection)
 
