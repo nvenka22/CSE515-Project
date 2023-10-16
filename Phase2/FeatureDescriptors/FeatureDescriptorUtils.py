@@ -502,6 +502,7 @@ def nmf(X, latent_features, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6
     """
     Decompose X to A*Y
     """
+    X = np.array(X)
     eps = 1e-5
     #print('Starting NMF decomposition with {} latent features and {} iterations.'.format(latent_features, max_iter))
     mask = np.sign(X)
@@ -1702,25 +1703,62 @@ def get_features_from_mat(data, feature_model):
     elif "resnet" in feature_model: return data["resnet_features"]
         
     
-def get_latent_semantics(dimred, feature_model):
-    file_path = "Phase2/LatentSemantics/"
+def get_latent_semantics(pkl_file_path, latsem,latentk,dimred, feature_model):
 
-    for file in os.listdir(file_path):
-        if file.startswith("latent_semantics_1_") and feature_model in file and dimred in file:
-            print(file)
-            return pickle.load(open(file_path+file, "rb")), file
+    if feature_model == "Color Moments":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+str(latentk)+"_output.pkl"
+    
 
-    raise FileExistsError()        
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+str(latentk)+"_output.pkl"    
+        
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+str(latentk)+"_output.pkl"
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+str(latentk)+"_output.pkl"
+       
+    elif feature_model == "ResNet-FC-1000":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+str(latentk)+"_output.pkl"
+
+    elif feature_model == "RESNET":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+str(latentk)+"_output.pkl" 
+
+    with open(pkl_file_path,'rb') as file:
+        print('File path is '+pkl_file_path)
+        __,pickle_data = pickle.load(file)
+
+    return pickle_data   
 
 
         
 def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
     scores = []
-    sim_score_method = {"color_moments": similarity_score_color_moments, "hog_descriptor": similarity_score_hog,
-                        "avgpool_descriptor": similarity_score_avgpool, "layer3_descriptor": similarity_score_layer3,
-                        "fc_descriptor": similarity_score_fc, "resnet": get_similarity_score_resnet}
+    sim_score_method = {"Color Moments": similarity_score_color_moments, "Histograms of Oriented Gradients(HOG)": similarity_score_hog,
+                        "ResNet-AvgPool-1024": similarity_score_avgpool, "ResNet-Layer3-1024": similarity_score_layer3,
+                        "ResNet-FC-1000": similarity_score_fc, "RESNET": get_similarity_score_resnet}
     
-    for ls in latent_semantics[1]:
+    for ls in latent_semantics:
         score = sim_score_method[feature_model](query_ls, ls)
         if "layer3" in feature_model or "color" in feature_model:
             score = 1-score
@@ -1731,19 +1769,17 @@ def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
 
     return index, scores
 
-def get_simlar_ls(idx, feature_model, k, dimred, odd_feature_collection, feature_collection, dataset):
-    latent_semantics, file = get_latent_semantics(dimred, feature_model)
-    file = file.split("_")
-    n_components= int(file[-2])
-    query_ls = None
-
+def get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, caltech101):
+    
     mod_path = Path(__file__).parent.parent
     mat_file_path = str(mod_path)+"/LatentSemantics/"
     data = scipy.io.loadmat(mat_file_path+'arrays.mat')
 
+    latent_semantics = get_latent_semantics(mat_file_path,latsem,latentk,dimred, feature_model)
+
 
     if idx%2==0:
-        query_ls = latent_semantics[1][idx//2]
+        query_ls = latent_semantics[idx//2]
         _imagedata = feature_collection.find_one({'_id': idx})
 
     else:
@@ -1760,7 +1796,7 @@ def get_simlar_ls(idx, feature_model, k, dimred, odd_feature_collection, feature
         ####getfeaturesforodd
         features = get_features_from_mat(data, feature_model)
         mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
-        query_ls = reduce_dimensionality(mixed_feature_descriptors, n_components, dimred)[0]
+        query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]
 
 
     top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
@@ -1773,15 +1809,32 @@ def get_simlar_ls(idx, feature_model, k, dimred, odd_feature_collection, feature
 
 
 
-def get_simlar_ls_img(imagedata, feature_model,k, dimred, feature_collection):
-    latent_semantics, file = get_latent_semantics(dimred, feature_model)
-    file = file.split("_")
-    n_components = int(file[-2])
+def get_simlar_ls_img(imagedata, feature_model, k, latsem, latentk, dimred, feature_collection) :
+
     mod_path = Path(__file__).parent.parent
     mat_file_path = str(mod_path)+"/LatentSemantics/"
     data = scipy.io.loadmat(mat_file_path+'arrays.mat')
 
-    if feature_model == "resnet":
+    latent_semantics = get_latent_semantics(mat_file_path,latsem,latentk,dimred, feature_model)
+    
+
+    if feature_model == "Color Moments":
+        odd_feature = np.array(imagedata['color_moments']).reshape(1,-1)
+        
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        odd_feature = np.array(imagedata['hog_descriptor']).reshape(1,-1)
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        odd_feature = np.array(imagedata['avgpool_descriptor']).reshape(1,-1)
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        odd_feature = np.array(imagedata['layer3_descriptor']).reshape(1,-1)
+       
+    elif feature_model == "ResNet-FC-1000":
+        odd_feature = np.array(imagedata['fc_descriptor']).reshape(1,-1)
+
+    elif feature_model == "RESNET":
         odd_feature = fc_calculator_2(np.array(imagedata["image"], dtype=np.uint8)).reshape(1,-1)
 
     else:
@@ -1789,7 +1842,7 @@ def get_simlar_ls_img(imagedata, feature_model,k, dimred, feature_collection):
 
     features = get_features_from_mat(data, feature_model)
     mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
-    query_ls = reduce_dimensionality(mixed_feature_descriptors, n_components, dimred)[0]
+    query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]
 
     top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
     k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
@@ -1832,13 +1885,22 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feat
         
 
     elif feature_model == "ResNet-Layer3-1024":
-        pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+str(latentk)+"_output.pkl"
        
     elif feature_model == "ResNet-FC-1000":
-        pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+str(latentk)+"_output.pkl"
 
     elif feature_model == "RESNET":
-        pkl_file_path += "latent_semantics_"+latsem[2]+"_RESNET_"+dimred+"_"+str(latentk)+"_output.pkl"
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+str(latentk)+"_output.pkl"
 
     with open(pkl_file_path,'rb') as file:
         print('File path is '+pkl_file_path)
