@@ -89,7 +89,7 @@ uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'j
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, caltech101)    	
+        	get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, similarity_collection, caltech101)    	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():
