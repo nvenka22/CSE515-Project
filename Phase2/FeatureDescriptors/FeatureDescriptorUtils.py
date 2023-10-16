@@ -1618,89 +1618,92 @@ def get_simlar_ls_label():
 def get_simlar_ls_label_img():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
 
-def get_simlar_ls__by_label(lbl, latsem, feature_model, k):
+def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feature_collection):
     #print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
 
-    # Specify the path to your pickle file
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path)+"/LatentSemantics/"
+    
+    if feature_model == "Color Moments":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+str(latentk)+"_output.pkl"
+    
 
-    """#Latent Semantics 1
-    if(latsem=="LS1"):
-        if(feature_model=="Color Moments"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="Histograms of Oriented Gradients(HOG)"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-AvgPool-1024"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-Layer3-1024"):
-=======
-    #Latent Semantics 1
-    if(latsem=="LS1"):
-        if(feature_model=="Color Moments"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-AvgPool-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-Layer3-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-FC-1000")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="RESNET")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+str(latentk)+"_output.pkl"    
+        
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+str(latentk)+"_output.pkl"
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+       
+    elif feature_model == "ResNet-FC-1000":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+
+    elif feature_model == "RESNET":
+        pkl_file_path += "latent_semantics_"+latsem[2]+"_RESNET_"+dimred+"_"+str(latentk)+"_output.pkl"
+
+    with open(pkl_file_path,'rb') as file:
+        print('File path is '+pkl_file_path)
+        __,pickle_data = pickle.load(file)
+        
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+
+    try:
+
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(mat_file_path,feature_collection)
+
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+
+        labels = data['labels']
+        cm_features = data['cm_features']
+        hog_features = data['hog_features']
+        avgpool_features = data['avgpool_features']
+        layer3_features = data['layer3_features']
+        fc_features = data['fc_features']
+        resnet_features = data['resnet_features']
+
+    print('Pickle File Loaded')
+        
+    print(pickle_data.shape)
+
+    if(latsem == 'LS1' or latsem == 'LS4'):
+        __, sim_label_image_dict = get_ls_similar_images_from_label_image_weighted(pickle_data,lbl, k,feature_collection)
+
+        for i in sim_label_image_dict.keys():
+            sim_label_image_dict[i] = sum(sim_label_image_dict[i])/len(sim_label_image_dict[i])
+
+        sim_label_image_dict = dict(sorted(sim_label_image_dict.items(), key = lambda x: x[1], reverse=True)[:k])
+
+        return sim_label_image_dict
+        
+    else:
+        get_ls_similar_labels_label_weighted(pickle_data, lbl, k, False)
+    
 
 
-    #Latent Semantics 2
-    elif(latsem=="LS2"):
-        if(feature_model=="Color Moments"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-AvgPool-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-Layer3-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-FC-1000")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="RESNET")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-
-    #Latent Semantics 3        
-    elif(latsem=="LS3"):
-        if(feature_model=="Color Moments"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-AvgPool-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-Layer3-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-FC-1000")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="RESNET")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-
-    #Latent Semantics 4
-    elif(latsem=="LS4"):
-        if(feature_model=="Color Moments"):
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="Histograms of Oriented Gradients(HOG)")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-AvgPool-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-Layer3-1024")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="ResNet-FC-1000")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-        elif(feature_model=="RESNET")
-            pickle_file_path = 'MWDB Project/CSE515-Project/Phase2/LatentSemantics/latent_semantics_4_layer3_descriptor_k-Means_5_output.pkl'
-
-    # Open the pickle file in binary read mode ('rb')
-    with open(pickle_file_path, 'rb') as file:
-        # Use pickle.load() to read the data from the file
-        loaded_data = pickle.load(file)"""
-
-def get_simlar_ls__by_label_img():
-    print("identifies and lists k most likely matching labels, along with their scores, under the selected latent space. for new image upload")
 def get_simlarlabel_byimg_ls():
     print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
 
