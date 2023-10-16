@@ -59,25 +59,37 @@ similarity_collection = connect_to_db(dbName,'image_similarities')
 idx = st.number_input('Enter ImageID',placeholder="Type a number...",format = "%d",min_value=0,max_value=8676)
 k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
+latsem = st.selectbox(
+    "Select the latent semantics",
+    ("LS1","LS2","LS3","LS4"),
+    label_visibility=st.session_state.visibility,
+    disabled=st.session_state.disabled,
+    )
+
 feature_model = st.selectbox(
         "Select Feature Space",
-        ("color_moments", "hog", "avgpool","layer3","fc", "resnet"),
+        ("Color Moments", "Histograms of Oriented Gradients(HOG)", "ResNet-AvgPool-1024","ResNet-Layer3-1024","ResNet-FC-1000", "RESNET"),
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
 
-dimred = st.selectbox(
-        "Select Dimensionality Reduction Technique",
-        ("SVD", "NNMF", "LDA","k-Means"),
-        label_visibility=st.session_state.visibility,
-        disabled=st.session_state.disabled,
-    )
+latentk = st.number_input('Enter k for Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
+
+if latsem!="LS2":
+    dimred = st.selectbox(
+            "Select Dimensionality Reduction Technique",
+            ("SVD", "NNMF", "LDA","k-Means"),
+            label_visibility=st.session_state.visibility,
+            disabled=st.session_state.disabled,
+        )
+else:
+    dimred = ""
 uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	get_simlar_ls(idx, feature_model, k, dimred, odd_feature_collection, feature_collection, caltech101)    	
+        	get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, caltech101)    	
 elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
     with st.spinner('Calculating...'):
         with st.container():
@@ -94,6 +106,6 @@ elif st.button("Run for uploaded image", type="primary") and uploaded_file is no
                 st.image(image, channels="BGR")
             #Getting image data by processing the image
             imagedata = query_ksimilar_new_label(image)
-            get_simlar_ls_img(imagedata, feature_model, k, dimred, feature_collection)     
+            get_simlar_ls_img(imagedata, feature_model, k, latsem, latentk, dimred, feature_collection)     
 else:
     st.write("")
