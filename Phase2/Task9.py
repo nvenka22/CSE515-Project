@@ -71,9 +71,10 @@ k = st.number_input('Enter k for similar labels',placeholder="Type a number...",
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
-        with st.container():    
-        	top_k_labels = get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feature_collection)
+        with st.container():
+            top_k_labels = get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feature_collection)
 
+            
             #print top k matching labels
             for key, val in top_k_labels.items():
                 st.write(get_class_name(key), ": ", val)

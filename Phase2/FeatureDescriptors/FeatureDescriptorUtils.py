@@ -1510,10 +1510,17 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feat
     print(pickle_data.shape)
 
     if(latsem == 'LS1' or latsem == 'LS4'):
-        get_ls_similar_labels_image_weighted(pickle_data,labels,idx, k)
+        __, sim_label_image_dict = get_ls_similar_images_from_label_image_weighted(pickle_data,lbl, k,feature_collection)
+
+        for i in sim_label_image_dict.keys():
+            sim_label_image_dict[i] = sum(sim_label_image_dict[i])/len(sim_label_image_dict[i])
+
+        sim_label_image_dict = dict(sorted(sim_label_image_dict.items(), key = lambda x: x[1], reverse=True)[:k])
+
+        return sim_label_image_dict
         
     else:
-        get_ls_similar_labels_label_weighted(pickle_data, lbl, k)
+        get_ls_similar_labels_label_weighted(pickle_data, lbl, k, False)
     
 
 
