@@ -17,7 +17,7 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.decomposition import TruncatedSVD, NMF, LatentDirichletAllocation
+from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.cluster import KMeans
 from sklearn import preprocessing as p
 import pickle
@@ -29,6 +29,7 @@ import tensortools as tt
 from tensortools.operations import unfold as tt_unfold, khatri_rao
 from tensorly import unfold as tl_unfold
 import os
+from scipy import linalg
 
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
@@ -497,6 +498,75 @@ def manual_svd(A):
 
     return U, V, sigma_inv
 
+def nmf(X, latent_features, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6):
+    """
+    Decompose X to A*Y
+    """
+    eps = 1e-5
+    #print('Starting NMF decomposition with {} latent features and {} iterations.'.format(latent_features, max_iter))
+    mask = np.sign(X)
+    # initial matrices. A is random [0,1] and Y is A\X.
+    rows, columns = X.shape
+    A = np.random.rand(rows, latent_features)
+    A = np.maximum(A, eps)
+
+    Y = linalg.lstsq(A, X)[0]
+    Y = np.maximum(Y, eps)
+
+    masked_X = mask * X
+    X_est_prev = np.dot(A, Y)
+    for i in range(1, max_iter + 1):
+        # ===== updates =====
+        # Matlab: A=A.*(((W.*X)*Y')./((W.*(A*Y))*Y'));
+        top = np.dot(masked_X, Y.T)
+        bottom = (np.dot((mask * (np.dot(A, Y))), Y.T)) + eps
+        A *= top / bottom
+
+        A = np.maximum(A, eps)
+        # print 'A',  np.round(A, 2)
+
+        # Matlab: Y=Y.*((A'*(W.*X))./(A'*(W.*(A*Y))));
+        top = np.dot(A.T, masked_X)
+        bottom = np.dot(A.T, (mask * (np.dot(A, Y)))) + eps
+        Y *= top / bottom
+        Y = np.maximum(Y, eps)
+        # print 'Y', np.round(Y, 2)
+
+
+        # ==== evaluation ====
+        if i % 5 == 0 or i == 1 or i == max_iter:
+            #print 'Iteration {}:'.format(i),
+            X_est = np.dot(A, Y)
+            err = mask * (X_est_prev - X_est)
+            fit_residual = np.sqrt(np.sum(err ** 2))
+            X_est_prev = X_est
+
+            curRes = linalg.norm(mask * (X - X_est), ord='fro')
+            #print 'fit residual', np.round(fit_residual, 4),
+            #print 'total residual', np.round(curRes, 4)
+            if curRes < error_limit or fit_residual < fit_error_limit:
+                break
+
+    YT = np.array(Y[:,:A.shape[1]]).T
+    #print("Return Shape: "+str(A.shape)+" "+str(YT.shape))
+    return np.dot(A,YT)
+
+def kmeans_decomposition(X, k, max_iterations=100):
+    centroids = X[np.random.choice(X.shape[0], k, replace=False)]
+
+    for _ in range(max_iterations):
+        # Assign each point to the nearest centroid
+        labels = np.argmin(np.linalg.norm(X[:, np.newaxis] - centroids, axis=2), axis=1)
+
+        # Update centroids
+        for i in range(k):
+            centroids[i] = np.mean(X[labels == i], axis=0)
+
+    # Compute distances to centroids as the decomposition
+    distances = np.linalg.norm(X[:, np.newaxis] - centroids, axis=2)
+
+    return distances
+
 def reduce_dimensionality(feature_model, k, technique):
     if technique == 'SVD':
         U, V, sigma_inv = manual_svd(feature_model)
@@ -513,19 +583,33 @@ def reduce_dimensionality(feature_model, k, technique):
         return latent_semantics
 
     elif technique == 'NNMF':
-        reducer = NMF(n_components=k)
+
+        latent_semantics_nnmf = nmf(feature_model, k, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6)
+
+        print("Latent Semantics Shape: "+str(latent_semantics_nnmf.shape))
+
+        return latent_semantics_nnmf
+
     elif technique == 'LDA':
+
         reducer = LatentDirichletAllocation(n_components=k)
+
+        latent_semantics = reducer.fit_transform(feature_model)
+
+        print("Latent Semantics Shape: "+str(latent_semantics.shape))
+
+        return latent_semantics
+
     elif technique == 'k-Means':
-        reducer = KMeans(n_clusters=k)
+
+        latent_semantics_kmeans = kmeans_decomposition(feature_model, k)
+
+        print("Latent Semantics Shape: "+str(latent_semantics_kmeans.shape))
+
+        return latent_semantics_kmeans
+
     else:
         raise ValueError("Invalid dimensionality reduction technique")
-
-    latent_semantics = reducer.fit_transform(feature_model)
-
-    print("Latent Semantics Shape: "+str(latent_semantics.shape))
-
-    return latent_semantics
 
 def get_top_k_latent_semantics(latent_semantics, k):
     top_k_indices = np.argsort(latent_semantics.sum(axis=0))[::-1][:k]
@@ -1564,8 +1648,6 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k, latent_sema
         for key, val in sim_la.items():
             st.write(key, ": ", val)
 
-
-
 def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature_collection):
 
     similarity_image_scores = {}
@@ -1702,8 +1784,6 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feat
     else:
         get_ls_similar_labels_label_weighted(pickle_data, lbl, k, False)
     
-
-
 def get_simlarlabel_byimg_ls():
     print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
 
