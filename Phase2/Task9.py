@@ -55,26 +55,30 @@ feature_model = st.selectbox(
         disabled=st.session_state.disabled,
     )
 
-if(latsem=='LS1'):
+latentk = st.number_input('Enter k for Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
+
+if(latsem!='LS2'):
     dimred = st.selectbox(
         "Select Dimensionality Reduction Technique",
         ("SVD", "NNMF", "LDA","k-Means"),
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
+else:
+    dimred = ""
 
-k = st.number_input('Enter k for similar images',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
-
-uploaded_file = st.file_uploader("Choose an image file", type=['png', 'jpeg', 'jpg'])
+k = st.number_input('Enter k for similar labels',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
-        with st.container():    
-        	get_simlar_ls__by_label(lbl, latsem, k)    
+        with st.container():
+            top_k_labels = get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feature_collection)
+
             
-elif st.button("Run for uploaded image", type="primary") and uploaded_file is not None:
-    with st.spinner('Calculating...'):
-        with st.container():    
-            get_simlar_ls__by_label_img()     
+            #print top k matching labels
+            for key, val in top_k_labels.items():
+                st.write(get_class_name(key), ": ", val)
+            st.write("")    
+              
 else:
     st.write("")
