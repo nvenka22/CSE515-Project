@@ -116,6 +116,9 @@ def get_ksimilar_labels(imagedata1,feature_collection,dataset,feature_space):
             similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
         elif feature_space == "ResNet-FC-1000":
             similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
+        elif feature_space == "RESNET":
+            similarity = get_similarity_score_resnet(imagedata1["fc_softmax_descriptor"], imagedata2["fc_softmax_descriptor"])
+
         #Storing similarity scores
         if label in sim_la:
             sim_la[label].append(similarity)
@@ -143,6 +146,8 @@ def get_k_similar_labels_old(idx,similarity_collection,feature_collection,datase
             similarity = f_spaces["layer3_descriptor"][str(cmpidx)]
         elif feature_space == "ResNet-FC-1000":
             similarity = f_spaces["fc_descriptor"][str(cmpidx)]
+        elif feature_space == "RESNET":
+            similarity = f_spaces["fc_softmax_descriptor"][str(cmpidx)]
         #Storing similarity scores
         if label in sim_la:
             sim_la[label].append(similarity)
@@ -173,7 +178,8 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
             "hog_descriptor": {},
             "avgpool_descriptor": {},
             "layer3_descriptor": {},
-            "fc_descriptor": {}
+            "fc_descriptor": {},
+            "fc_softmax_descriptor": {}
         }
     
     for cmpidx in tqdm(range(0,len(dataset),2)):
@@ -185,6 +191,8 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
         avgpool_similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
         layer3_similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
         fc_similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
+        fc_sofmax_similarity = get_similarity_score_resnet(imagedata1["fc_softmax_descriptor"], imagedata2["fc_softmax_descriptor"])
+
         if not np.isnan(color_moments_similarity):
             similarities["color_moments"][str(cmpidx)] = color_moments_similarity
         else: 
@@ -193,6 +201,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
         similarities["avgpool_descriptor"][str(cmpidx)] =  avgpool_similarity
         similarities["layer3_descriptor"][str(cmpidx)] = layer3_similarity
         similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
+        similarities["fc_softmax_descriptor"][str(cmpidx)] =  fc_sofmax_similarity
     
     similarity_collection.update_one({'_id':index},{'$set':similarities},upsert = True)
     
@@ -229,6 +238,9 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
 
     elif feature_space == "ResNet-FC-1000":
         feature_space = "fc_descriptor"
+
+    elif feature_space == "RESNET":
+        feature_space = "fc_softmax_descriptor"
         
     
    #Extract required scores and calculate average
@@ -279,7 +291,8 @@ def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_colle
             "hog_descriptor": {},
             "avgpool_descriptor": {},
             "layer3_descriptor": {},
-            "fc_descriptor": {}
+            "fc_descriptor": {},
+            "fc_softmax_descriptor": {}
         }
     
     for cmpidx in tqdm(range(0,len(dataset),2)):
@@ -291,6 +304,7 @@ def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_colle
         avgpool_similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
         layer3_similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
         fc_similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
+        fc_sofmax_similarity = get_similarity_score_resnet(imagedata1["fc_softmax_descriptor"], imagedata2["fc_softmax_descriptor"])
         if not np.isnan(color_moments_similarity):
             similarities["color_moments"][str(cmpidx)] = color_moments_similarity
         else: 
@@ -299,6 +313,7 @@ def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_colle
         similarities["avgpool_descriptor"][str(cmpidx)] =  avgpool_similarity
         similarities["layer3_descriptor"][str(cmpidx)] = layer3_similarity
         similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
+        similarities["fc_softmax_descriptor"][str(cmpidx)] =  fc_sofmax_similarity
     
     return similarities
 
