@@ -1433,8 +1433,8 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
 def get_latent_semantics(dimred):
     file_path = "Phase2/LatentSemantics/"
     for file in os.listdir(file_path):
-        if file.startswith("latent_semantics_1_") and dimred in file:
-            return pickle.load(open(file, "rb")), file
+        if file.startswith("latent_semantics_1_") and "resnet" in file and "LDA" in file:   ##TODO
+            return pickle.load(open(file_path+file, "rb")), file
         
 def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
     scores = []
@@ -1443,27 +1443,42 @@ def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
                         "fc_descriptor": similarity_score_fc, "fc_softmax_descriptor": get_similarity_score_resnet}
     
     for ls in latent_semantics[1]:
-        scores.append(sim_score_method[feature_model](query_ls, latent_semantics))
+        score = sim_score_method[feature_model](query_ls, ls)
+        if "layer3" in feature_model or "color" in feature_model:
+            score = 1-score
+        scores.append(score)
     
     index =  np.argsort(scores)[::-1][:k]
-    scores = [latent_semantics[idx] for idx in index]
+    scores = [scores[idx] for idx in index]
 
     return index, scores
 
-def get_simlar_ls(idx, k, dimred, odd_feature_collection, feature_collection):
+def get_simlar_ls(idx, k, dimred, odd_feature_collection, feature_collection, dataset):
     latent_semantics, file = get_latent_semantics(dimred)
     file = file.split("_")
-    n_components, fd = file[-2], "fc_softmax_descriptor" if file[3] == "resnet" else file[3]+"_"+file[4] ### Parsing the filename to get the n and fd 
+    n_components, fd = int(file[-2]), "fc_softmax_descriptor" if file[3] == "resnet" else file[3]+"_"+file[4] ### Parsing the filename to get the n and fd 
     query_ls = None
     if idx%2==0:
         query_ls = latent_semantics[1][idx//2]
+        _imagedata = feature_collection.find_one({'_id': idx})
+
     else:
-        imagedata = odd_feature_collection.find_one({'_id': idx})[fd]
-        query_ls = reduce_dimensionality(imagedata, n_components, dimred)
+        _imagedata = odd_feature_collection.find_one({'_id': idx})
+        if fd == "fc_softmax_descriptor":
+            image = cv2.cvtColor(np.array(dataset.__getitem__(index = idx)[0]),cv2.COLOR_RGB2BGR)
+            features = fc_calculator_2(np.array(image, dtype=np.uint8)).tolist()
+            features = np.array(features).reshape(1,-1)
+        else:
+            features = odd_feature_collection.find_one({'_id': idx})[fd]
+            
+        query_ls = reduce_dimensionality(features, n_components, dimred)
     
     top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, fd)
-    k_similar = {str(idx): score for idx, score in zip(top_k_index, scores)}
+    k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
     ### Display Images and Score
+    
+    image = np.array(_imagedata['image'], dtype=np.uint8)
+    display_image_centered(np.array(image),str(idx))
     show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
 
 
