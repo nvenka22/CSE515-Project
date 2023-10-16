@@ -766,9 +766,9 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
                 score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
                 label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labelx] = score
 
-        print("Label Similarities for Label "+str(labelx)+" is of len: "+str(len(label_sim_matrix[labelx]))+" and has values: "+str(label_sim_matrix[labelx]))
+        # print("Label Similarities for Label "+str(labelx)+" is of len: "+str(len(label_sim_matrix[labelx]))+" and has values: "+str(label_sim_matrix[labelx]))
 
-    print(label_sim_matrix)
+    # print(label_sim_matrix)
     
     return label_sim_matrix
 
