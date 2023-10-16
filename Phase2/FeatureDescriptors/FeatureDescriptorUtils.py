@@ -502,6 +502,7 @@ def nmf(X, latent_features, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6
     """
     Decompose X to A*Y
     """
+    X = np.array(X)
     eps = 1e-5
     #print('Starting NMF decomposition with {} latent features and {} iterations.'.format(latent_features, max_iter))
     mask = np.sign(X)
