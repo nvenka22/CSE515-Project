@@ -1769,7 +1769,7 @@ def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
 
     return index, scores
 
-def get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, caltech101):
+def get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, similarity_collection,caltech101):
     
     mod_path = Path(__file__).parent.parent
     mat_file_path = str(mod_path)+"/LatentSemantics/"
@@ -1777,35 +1777,67 @@ def get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_col
 
     latent_semantics = get_latent_semantics(mat_file_path,latsem,latentk,dimred, feature_model)
 
+    if latsem == "LS1" or latsem == "LS4":
 
-    if idx%2==0:
-        query_ls = latent_semantics[idx//2]
-        _imagedata = feature_collection.find_one({'_id': idx})
+        if idx%2==0:
+            query_ls = latent_semantics[idx//2]
+            _imagedata = feature_collection.find_one({'_id': idx})
+
+        else:
+            _imagedata = odd_feature_collection.find_one({"_id": idx})
+            if feature_model == "RESNET":
+                image = np.array(_imagedata['image'], dtype=np.uint8)
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA) 
+                image = np.array(image)
+                odd_feature = fc_calculator_2(image).reshape(1,-1)
+            
+            else:
+                odd_feature = np.array(_imagedata[feature_model]).reshape(1,-1)
+            ####getfeaturesforodd
+            features = get_features_from_mat(data, feature_model)
+            mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+            query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]
+
+
+        top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
+        k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
+        ### Display Images and Score
+        
+        image = np.array(_imagedata['image'], dtype=np.uint8)
+        display_image_centered(np.array(image),str(idx))
+        show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
 
     else:
-        _imagedata = odd_feature_collection.find_one({"_id": idx})
-        if feature_model == "resnet":
-            image = np.array(_imagedata['image'], dtype=np.uint8)
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA) 
-            image = np.array(image)
-            odd_feature = fc_calculator_2(image).reshape(1,-1)
-        
+
+        if idx%2==0:
+            _imagedata = feature_collection.find_one({'_id': idx})
+            label = _imagedata['label']
+
         else:
-            odd_feature = np.array(_imagedata[feature_model]).reshape(1,-1)
-        ####getfeaturesforodd
-        features = get_features_from_mat(data, feature_model)
-        mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
-        query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]
+            _imagedata = odd_feature_collection.find_one({"_id": idx})
+            """if feature_model == "RESNET":
+                                                    image = np.array(_imagedata['image'], dtype=np.uint8)
+                                                    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                                                    image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA) 
+                                                    image = np.array(image)
+                                                    odd_feature = fc_calculator_2(image).reshape(1,-1)
+                                                
+                                                else:
+                                                    odd_feature = np.array(_imagedata[feature_model]).reshape(1,-1)
+                                                ####getfeaturesforodd
+                                                features = get_features_from_mat(data, feature_model)
+                                                mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+                                                query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]"""
+            label = _imagedata['label']
 
+        sim_la = get_ls_similar_labels_label_weighted(latent_semantics, label, 1, True)
 
-    top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
-    k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
-    ### Display Images and Score
-    
-    image = np.array(_imagedata['image'], dtype=np.uint8)
-    display_image_centered(np.array(image),str(idx))
-    show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+        print(get_class_name(list(sim_la.keys())[0]))
+
+        matching_label = list(sim_la.keys())[0]
+
+        similarity_calculator_by_label(matching_label,feature_model,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)
 
 
 
