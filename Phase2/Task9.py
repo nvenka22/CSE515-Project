@@ -76,9 +76,9 @@ if st.button("Run", type="primary"):
 
             
             #print top k matching labels
-            for key, val in top_k_labels.items():
-                st.write(get_class_name(key), ": ", val)
-            st.write("")    
+            # for key, val in top_k_labels.items():
+            #     st.write(get_class_name(key), ": ", val)
+            # st.write("")    
               
 else:
     st.write("")

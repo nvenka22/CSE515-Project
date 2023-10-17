@@ -502,6 +502,7 @@ def nmf(X, latent_features, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6
     """
     Decompose X to A*Y
     """
+    X = np.array(X)
     eps = 1e-5
     #print('Starting NMF decomposition with {} latent features and {} iterations.'.format(latent_features, max_iter))
     mask = np.sign(X)
@@ -552,6 +553,7 @@ def nmf(X, latent_features, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6
     return np.dot(A,YT)
 
 def kmeans_decomposition(X, k, max_iterations=100):
+    X = np.array(X)
     centroids = X[np.random.choice(X.shape[0], k, replace=False)]
 
     for _ in range(max_iterations):
@@ -1670,7 +1672,7 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
     label_ls = []
 
     for index in required_indices_for_label:
-        label_ls.append(pickle_data[index])
+        label_ls.append(pickle_data[int(index/2)])
 
     label_ls = np.array(label_ls)
     print(label_ls.shape)
