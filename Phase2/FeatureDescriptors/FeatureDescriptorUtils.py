@@ -1309,7 +1309,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
-        output_file += "latent_semantics_4_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_hog_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1319,7 +1319,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-AvgPool-1024":
-        output_file += "latent_semantics_4_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_avgpool_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1329,7 +1329,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-Layer3-1024":
-        output_file += "latent_semantics_4_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_layer3_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1339,7 +1339,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-FC-1000":
-        output_file += "latent_semantics_4_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_fc_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1349,7 +1349,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
 
     elif feature_model == "RESNET":
-        output_file += "latent_semantics_4_resnet_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_resnet_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
