@@ -596,6 +596,8 @@ def reduce_dimensionality(feature_model, k, technique):
 
         reducer = LatentDirichletAllocation(n_components=k)
 
+        print("Transforming LDA")
+
         latent_semantics = reducer.fit_transform(feature_model)
 
         print("Latent Semantics Shape: "+str(latent_semantics.shape))
@@ -770,7 +772,7 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
 
         # print("Label Similarities for Label "+str(labelx)+" is of len: "+str(len(label_sim_matrix[labelx]))+" and has values: "+str(label_sim_matrix[labelx]))
 
-    # print(label_sim_matrix)
+    print(label_sim_matrix)
     
     return label_sim_matrix
 
@@ -1617,9 +1619,9 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k, latent_sema
     if latent_semantics_input_image == None:
         
         for i in range(0,8677,2):
-            if get_class_name(np.nonzero(labels[i])[0][0]) not in similarity_image_scores.keys():
-                similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])]=[]
-            similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],pickle_data[int(idx/2)]))
+            if get_class_name(np.nonzero(labels[int(i/2)])[0][0]) not in similarity_image_scores.keys():
+                similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])]=[]
+            similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],pickle_data[int(idx/2)]))
         
         
         sim_la = {}
@@ -1635,9 +1637,9 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k, latent_sema
     else:
 
         for i in range(0,8677,2):
-            if get_class_name(np.nonzero(labels[i])[0][0]) not in similarity_image_scores.keys():
-                similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])]=[]
-            similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],latent_semantics_input_image))
+            if get_class_name(np.nonzero(labels[int(i/2)])[0][0]) not in similarity_image_scores.keys():
+                similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])]=[]
+            similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],latent_semantics_input_image))
         
         
         sim_la = {}
@@ -1977,6 +1979,11 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feat
             sim_label_image_dict[i] = sum(sim_label_image_dict[i])/len(sim_label_image_dict[i])
 
         sim_label_image_dict = dict(sorted(sim_label_image_dict.items(), key = lambda x: x[1], reverse=True)[:k])
+
+        #print top k matching labels
+        for key, val in sim_label_image_dict.items():
+            st.write(get_class_name(key), ": ", val)
+            st.write("")   
 
         return sim_label_image_dict
         
