@@ -17,7 +17,7 @@ from scipy.stats import skew
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.decomposition import TruncatedSVD, NMF, LatentDirichletAllocation
+from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.cluster import KMeans
 from sklearn import preprocessing as p
 import pickle
@@ -29,6 +29,7 @@ import tensortools as tt
 from tensortools.operations import unfold as tt_unfold, khatri_rao
 from tensorly import unfold as tl_unfold
 import os
+from scipy import linalg
 
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
@@ -497,6 +498,77 @@ def manual_svd(A):
 
     return U, V, sigma_inv
 
+def nmf(X, latent_features, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6):
+    """
+    Decompose X to A*Y
+    """
+    X = np.array(X)
+    eps = 1e-5
+    #print('Starting NMF decomposition with {} latent features and {} iterations.'.format(latent_features, max_iter))
+    mask = np.sign(X)
+    # initial matrices. A is random [0,1] and Y is A\X.
+    rows, columns = X.shape
+    A = np.random.rand(rows, latent_features)
+    A = np.maximum(A, eps)
+
+    Y = linalg.lstsq(A, X)[0]
+    Y = np.maximum(Y, eps)
+
+    masked_X = mask * X
+    X_est_prev = np.dot(A, Y)
+    for i in range(1, max_iter + 1):
+        # ===== updates =====
+        # Matlab: A=A.*(((W.*X)*Y')./((W.*(A*Y))*Y'));
+        top = np.dot(masked_X, Y.T)
+        bottom = (np.dot((mask * (np.dot(A, Y))), Y.T)) + eps
+        A *= top / bottom
+
+        A = np.maximum(A, eps)
+        # print 'A',  np.round(A, 2)
+
+        # Matlab: Y=Y.*((A'*(W.*X))./(A'*(W.*(A*Y))));
+        top = np.dot(A.T, masked_X)
+        bottom = np.dot(A.T, (mask * (np.dot(A, Y)))) + eps
+        Y *= top / bottom
+        Y = np.maximum(Y, eps)
+        # print 'Y', np.round(Y, 2)
+
+
+        # ==== evaluation ====
+        if i % 5 == 0 or i == 1 or i == max_iter:
+            #print 'Iteration {}:'.format(i),
+            X_est = np.dot(A, Y)
+            err = mask * (X_est_prev - X_est)
+            fit_residual = np.sqrt(np.sum(err ** 2))
+            X_est_prev = X_est
+
+            curRes = linalg.norm(mask * (X - X_est), ord='fro')
+            #print 'fit residual', np.round(fit_residual, 4),
+            #print 'total residual', np.round(curRes, 4)
+            if curRes < error_limit or fit_residual < fit_error_limit:
+                break
+
+    YT = np.array(Y[:,:A.shape[1]]).T
+    #print("Return Shape: "+str(A.shape)+" "+str(YT.shape))
+    return np.dot(A,YT)
+
+def kmeans_decomposition(X, k, max_iterations=100):
+    X = np.array(X)
+    centroids = X[np.random.choice(X.shape[0], k, replace=False)]
+
+    for _ in range(max_iterations):
+        # Assign each point to the nearest centroid
+        labels = np.argmin(np.linalg.norm(X[:, np.newaxis] - centroids, axis=2), axis=1)
+
+        # Update centroids
+        for i in range(k):
+            centroids[i] = np.mean(X[labels == i], axis=0)
+
+    # Compute distances to centroids as the decomposition
+    distances = np.linalg.norm(X[:, np.newaxis] - centroids, axis=2)
+
+    return distances
+
 def reduce_dimensionality(feature_model, k, technique):
     if technique == 'SVD':
         U, V, sigma_inv = manual_svd(feature_model)
@@ -513,19 +585,35 @@ def reduce_dimensionality(feature_model, k, technique):
         return latent_semantics
 
     elif technique == 'NNMF':
-        reducer = NMF(n_components=k)
+
+        latent_semantics_nnmf = nmf(feature_model, k, max_iter=100, error_limit=1e-6, fit_error_limit=1e-6)
+
+        print("Latent Semantics Shape: "+str(latent_semantics_nnmf.shape))
+
+        return latent_semantics_nnmf
+
     elif technique == 'LDA':
+
         reducer = LatentDirichletAllocation(n_components=k)
+
+        print("Transforming LDA")
+
+        latent_semantics = reducer.fit_transform(feature_model)
+
+        print("Latent Semantics Shape: "+str(latent_semantics.shape))
+
+        return latent_semantics
+
     elif technique == 'k-Means':
-        reducer = KMeans(n_clusters=k)
+
+        latent_semantics_kmeans = kmeans_decomposition(feature_model, k)
+
+        print("Latent Semantics Shape: "+str(latent_semantics_kmeans.shape))
+
+        return latent_semantics_kmeans
+
     else:
         raise ValueError("Invalid dimensionality reduction technique")
-
-    latent_semantics = reducer.fit_transform(feature_model)
-
-    print("Latent Semantics Shape: "+str(latent_semantics.shape))
-
-    return latent_semantics
 
 def get_top_k_latent_semantics(latent_semantics, k):
     top_k_indices = np.argsort(latent_semantics.sum(axis=0))[::-1][:k]
@@ -682,7 +770,7 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
                 score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
                 label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labelx] = score
 
-        print("Label Similarities for Label "+str(labelx)+" is of len: "+str(len(label_sim_matrix[labelx]))+" and has values: "+str(label_sim_matrix[labelx]))
+        # print("Label Similarities for Label "+str(labelx)+" is of len: "+str(len(label_sim_matrix[labelx]))+" and has values: "+str(label_sim_matrix[labelx]))
 
     print(label_sim_matrix)
     
@@ -1221,7 +1309,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
 
 
     elif feature_model == "Histograms of Oriented Gradients(HOG)":
-        output_file += "latent_semantics_4_hog_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_hog_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1231,7 +1319,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['hog_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-AvgPool-1024":
-        output_file += "latent_semantics_4_avgpool_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_avgpool_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1241,7 +1329,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['avgpool_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-Layer3-1024":
-        output_file += "latent_semantics_4_layer3_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_layer3_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1251,7 +1339,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = 1 - scores['layer3_descriptor'][str(cmpidx)]
 
     elif feature_model == "ResNet-FC-1000":
-        output_file += "latent_semantics_4_fc_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_fc_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1261,7 +1349,7 @@ def ls4(feature_model,k,dimred,similarity_collection):
                     similarity_matrix[int(idx/2)][int(cmpidx/2)] = scores['fc_descriptor'][str(cmpidx)]
 
     elif feature_model == "RESNET":
-        output_file += "latent_semantics_4_resnet_descriptor_"+dimred+"_"+str(k)+"_output.pkl"
+        output_file += "latent_semantics_4_resnet_"+dimred+"_"+str(k)+"_output.pkl"
         for idx in tqdm(range(0,dataset_size,2)):
             scores = similarity_collection.find_one({'_id': idx})
             for cmpidx in range(0,dataset_size,2):
@@ -1531,9 +1619,9 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k, latent_sema
     if latent_semantics_input_image == None:
         
         for i in range(0,8677,2):
-            if get_class_name(np.nonzero(labels[i])[0][0]) not in similarity_image_scores.keys():
-                similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])]=[]
-            similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],pickle_data[int(idx/2)]))
+            if get_class_name(np.nonzero(labels[int(i/2)])[0][0]) not in similarity_image_scores.keys():
+                similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])]=[]
+            similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],pickle_data[int(idx/2)]))
         
         
         sim_la = {}
@@ -1549,9 +1637,9 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k, latent_sema
     else:
 
         for i in range(0,8677,2):
-            if get_class_name(np.nonzero(labels[i])[0][0]) not in similarity_image_scores.keys():
-                similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])]=[]
-            similarity_image_scores[get_class_name(np.nonzero(labels[i])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],latent_semantics_input_image))
+            if get_class_name(np.nonzero(labels[int(i/2)])[0][0]) not in similarity_image_scores.keys():
+                similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])]=[]
+            similarity_image_scores[get_class_name(np.nonzero(labels[int(i/2)])[0][0])].append(cosine_similarity_calculator(pickle_data[int(i/2)],latent_semantics_input_image))
         
         
         sim_la = {}
@@ -1564,8 +1652,6 @@ def get_ls_similar_labels_image_weighted(pickle_data,labels, idx, k, latent_sema
         for key, val in sim_la.items():
             st.write(key, ": ", val)
 
-
-
 def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature_collection):
 
     similarity_image_scores = {}
@@ -1574,7 +1660,7 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
     image_data_by_label = feature_collection.find({'label':label})
 
     final_scores = []
-    
+
     required_indices_for_label = []
     labels_array = []
     
@@ -1588,7 +1674,7 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
     label_ls = []
 
     for index in required_indices_for_label:
-        label_ls.append(pickle_data[index])
+        label_ls.append(pickle_data[int(index/2)])
 
     label_ls = np.array(label_ls)
     print(label_ls.shape)
@@ -1609,9 +1695,197 @@ def get_ls_similar_images_from_label_image_weighted(pickle_data,label, k,feature
             similarity_label_scores[imglabel].append(similarity_image_scores[index])
 
     return similarity_image_scores,similarity_label_scores
+
+def get_features_from_mat(data, feature_model):
     
-def get_simlar_ls_img() :
-    print("identifies and visualizes the most similar k images, along with their scores, under the selected latent space. for new image upload")
+    if "color" in feature_model or "cm" in feature_model: return data["cm_features"]
+    elif "hog" in feature_model: return data["hog_features"]
+    elif "avgpool" in feature_model: return data["avgpool_features"]
+    elif "layer3" in feature_model: return data["layer3_features"]
+    elif "fc" in feature_model: return data["fc_features"]
+    elif "resnet" in feature_model: return data["resnet_features"]
+        
+    
+def get_latent_semantics(pkl_file_path, latsem,latentk,dimred, feature_model):
+
+    if feature_model == "Color Moments":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_color_moments_"+str(latentk)+"_output.pkl"
+    
+
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_hog_descriptor_"+str(latentk)+"_output.pkl"    
+        
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_ResNet-AvgPool-1024_"+str(latentk)+"_output.pkl"
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+str(latentk)+"_output.pkl"
+       
+    elif feature_model == "ResNet-FC-1000":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+str(latentk)+"_output.pkl"
+
+    elif feature_model == "RESNET":
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+str(latentk)+"_output.pkl" 
+
+    with open(pkl_file_path,'rb') as file:
+        print('File path is '+pkl_file_path)
+        __,pickle_data = pickle.load(file)
+
+    return pickle_data   
+
+
+        
+def get_topk_image_score(k, query_ls, latent_semantics, feature_model):
+    scores = []
+    sim_score_method = {"Color Moments": similarity_score_color_moments, "Histograms of Oriented Gradients(HOG)": similarity_score_hog,
+                        "ResNet-AvgPool-1024": similarity_score_avgpool, "ResNet-Layer3-1024": similarity_score_layer3,
+                        "ResNet-FC-1000": similarity_score_fc, "RESNET": get_similarity_score_resnet}
+    
+    for ls in latent_semantics:
+        score = sim_score_method[feature_model](query_ls, ls)
+        if "layer3" in feature_model or "color" in feature_model:
+            score = 1-score
+        scores.append(score)
+    
+    index =  np.argsort(scores)[::-1][:k]
+    scores = [scores[idx] for idx in index]
+
+    return index, scores
+
+def get_simlar_ls(idx, feature_model, k,latsem, latentk, dimred, odd_feature_collection, feature_collection, similarity_collection,caltech101):
+    
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+    data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+
+    latent_semantics = get_latent_semantics(mat_file_path,latsem,latentk,dimred, feature_model)
+
+    if latsem == "LS1" or latsem == "LS4":
+
+        if idx%2==0:
+            query_ls = latent_semantics[idx//2]
+            _imagedata = feature_collection.find_one({'_id': idx})
+
+        else:
+            _imagedata = odd_feature_collection.find_one({"_id": idx})
+            if feature_model == "RESNET":
+                image = np.array(_imagedata['image'], dtype=np.uint8)
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA) 
+                image = np.array(image)
+                odd_feature = fc_calculator_2(image).reshape(1,-1)
+            
+            else:
+                odd_feature = np.array(_imagedata[feature_model]).reshape(1,-1)
+            ####getfeaturesforodd
+            features = get_features_from_mat(data, feature_model)
+            mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+            query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]
+
+
+        top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
+        k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
+        ### Display Images and Score
+        
+        image = np.array(_imagedata['image'], dtype=np.uint8)
+        display_image_centered(np.array(image),str(idx))
+        show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+
+    else:
+
+        if idx%2==0:
+            _imagedata = feature_collection.find_one({'_id': idx})
+            label = _imagedata['label']
+
+        else:
+            _imagedata = odd_feature_collection.find_one({"_id": idx})
+            """if feature_model == "RESNET":
+                                                    image = np.array(_imagedata['image'], dtype=np.uint8)
+                                                    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                                                    image = cv2.resize(image, dsize=(300, 100), interpolation=cv2.INTER_AREA) 
+                                                    image = np.array(image)
+                                                    odd_feature = fc_calculator_2(image).reshape(1,-1)
+                                                
+                                                else:
+                                                    odd_feature = np.array(_imagedata[feature_model]).reshape(1,-1)
+                                                ####getfeaturesforodd
+                                                features = get_features_from_mat(data, feature_model)
+                                                mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+                                                query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]"""
+            label = _imagedata['label']
+
+        sim_la = get_ls_similar_labels_label_weighted(latent_semantics, label, 1, True)
+
+        print(get_class_name(list(sim_la.keys())[0]))
+
+        matching_label = list(sim_la.keys())[0]
+
+        similarity_calculator_by_label(matching_label,feature_model,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)
+
+
+
+def get_simlar_ls_img(imagedata, feature_model, k, latsem, latentk, dimred, feature_collection) :
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = str(mod_path)+"/LatentSemantics/"
+    data = scipy.io.loadmat(mat_file_path+'arrays.mat')
+
+    latent_semantics = get_latent_semantics(mat_file_path,latsem,latentk,dimred, feature_model)
+    
+
+    if feature_model == "Color Moments":
+        odd_feature = np.array(imagedata['color_moments']).reshape(1,-1)
+        
+    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        odd_feature = np.array(imagedata['hog_descriptor']).reshape(1,-1)
+
+    elif feature_model == "ResNet-AvgPool-1024":
+        odd_feature = np.array(imagedata['avgpool_descriptor']).reshape(1,-1)
+        
+
+    elif feature_model == "ResNet-Layer3-1024":
+        odd_feature = np.array(imagedata['layer3_descriptor']).reshape(1,-1)
+       
+    elif feature_model == "ResNet-FC-1000":
+        odd_feature = np.array(imagedata['fc_descriptor']).reshape(1,-1)
+
+    elif feature_model == "RESNET":
+        odd_feature = fc_calculator_2(np.array(imagedata["image"], dtype=np.uint8)).reshape(1,-1)
+
+    else:
+        odd_feature = np.array(imagedata[feature_model]).reshape(1,-1)
+
+    features = get_features_from_mat(data, feature_model)
+    mixed_feature_descriptors = np.insert(features, 0, odd_feature, axis=0)
+    query_ls = reduce_dimensionality(mixed_feature_descriptors, latentk, dimred)[0]
+
+    top_k_index, scores = get_topk_image_score(k, query_ls, latent_semantics, feature_model)
+    k_similar = {str(idx*2): score for idx, score in zip(top_k_index, scores)}
+    
+    ### Display Images and Score
+    show_ksimilar(k_similar, feature_collection, f"Most Similar {k} images with scores: ")
+    
+    
     
 def get_simlar_ls_label():
     print(" identifies and lists k most likely matching labels, along with their scores, under the selected latent space.")
@@ -1646,13 +1920,22 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feat
         
 
     elif feature_model == "ResNet-Layer3-1024":
-        pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_layer3_descriptor_"+str(latentk)+"_output.pkl"
        
     elif feature_model == "ResNet-FC-1000":
-        pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_fc_descriptor_"+str(latentk)+"_output.pkl"
 
     elif feature_model == "RESNET":
-        pkl_file_path += "latent_semantics_"+latsem[2]+"_RESNET_"+dimred+"_"+str(latentk)+"_output.pkl"
+        if dimred!="":
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+dimred+"_"+str(latentk)+"_output.pkl"
+        else:
+            pkl_file_path += "latent_semantics_"+latsem[2]+"_resnet_"+str(latentk)+"_output.pkl"
 
     with open(pkl_file_path,'rb') as file:
         print('File path is '+pkl_file_path)
@@ -1697,13 +1980,16 @@ def get_simlar_ls__by_label(lbl, latsem, feature_model, latentk, dimred, k, feat
 
         sim_label_image_dict = dict(sorted(sim_label_image_dict.items(), key = lambda x: x[1], reverse=True)[:k])
 
+        #print top k matching labels
+        for key, val in sim_label_image_dict.items():
+            st.write(get_class_name(key), ": ", val)
+            st.write("")   
+
         return sim_label_image_dict
         
     else:
         get_ls_similar_labels_label_weighted(pickle_data, lbl, k, False)
     
-
-
 def get_simlarlabel_byimg_ls():
     print("identifies and lists k most relevant images, along with their scores, under the selected latent space.")
 
