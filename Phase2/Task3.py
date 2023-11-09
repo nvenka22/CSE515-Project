@@ -1,4 +1,4 @@
-odd_feature = np.array(imagedata[feature_model]).reshape(1,-1)import os
+import os
 import cv2
 from torchvision.models import resnet50
 from torchvision.datasets import Caltech101
