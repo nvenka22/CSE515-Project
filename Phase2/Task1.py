@@ -49,6 +49,6 @@ feature_space = st.selectbox(
 
 
 if st.button("Run", type="primary"):
-	with st.spinner('Calculating...'):
-		with st.container():
-    		similarity_calculator_by_label(label, feature_space, k,odd_feature_collection, feature_collection, similarity_collection, caltech101)
+    with st.spinner('Calculating...'):
+        with st.container():
+            similarity_calculator_by_label(label, feature_space, k,odd_feature_collection, feature_collection, similarity_collection, caltech101)

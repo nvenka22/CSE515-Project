@@ -5,6 +5,8 @@ from torchvision.datasets import Caltech101
 from torch.autograd import Variable
 import pandas as pd
 import numpy as np
+import random
+from numpy.random import uniform
 import torch
 import torchvision.transforms as transforms
 from scipy.stats import moment
@@ -30,7 +32,7 @@ from tensortools.operations import unfold as tt_unfold, khatri_rao
 from tensorly import unfold as tl_unfold
 import os
 from scipy import linalg
-
+from math import sqrt
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
@@ -467,7 +469,7 @@ def queryksimilar_newimg(image, k,odd_feature_collection,feature_collection,simi
 
     elif feature_space == "ResNet-Softmax":
         st.markdown("Query Image")
-        display_image_centered(np.array(image),str(index))
+        display_image_centered(np.array(image),str("User Uploaded"))
         display_feature_vector(imagedata['fc_softmax_descriptor'],"Query Image FC Softmax Descriptor")
         st.markdown('ResNet-Softmax - Cosine Similarity')
         show_ksimilar(fc_softmax_similar,feature_collection,"Similarity Score:")
@@ -966,6 +968,77 @@ def store_by_feature(output_file,feature_collection):
         resnet_features.append(resnetarray)
 
     scipy.io.savemat(output_file+'arrays.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features, 'resnet_features':resnet_features})  
+
+def store_by_feature_odd(output_file,feature_collection):
+
+    labels = []
+    cm_features = []
+    hog_features = []
+    avgpool_features =[]
+    layer3_features = []
+    fc_features = []
+    resnet_features = []
+
+    for index in tqdm(range(1,dataset_size,2)):
+        doc = feature_collection.find_one({'_id': index})
+
+        label = int(doc['label'])
+        print(label)
+
+        labelarray = [0 if x!=label else 1 for x in range(101)]
+
+        labels.append(labelarray)
+                    
+        fetchedarray = doc['color_moments']
+
+        cmarray = []
+
+        for row in range(0,10):
+            for col in range(0,10):
+                for channel in fetchedarray[row][col]:
+                    cmarray.append(channel[0])
+                    cmarray.append(channel[1])
+                    cmarray.append(channel[2])
+
+        cmarray = [0 if pd.isna(x) else x for x in cmarray]
+
+        cmarray = np.array(cmarray)
+
+        cm_features.append(cmarray)
+
+        fetchedarray = doc['hog_descriptor']
+                
+        hogarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        hogarray = np.array(hogarray)
+
+        hog_features.append(hogarray)
+
+        fetchedarray = doc['avgpool_descriptor']
+                
+        avgpoolarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        avgpoolarray = np.array(avgpoolarray)
+
+        avgpool_features.append(avgpoolarray)
+
+        fetchedarray = doc['layer3_descriptor']
+
+        layer3array = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        layer3array = np.array(layer3array)
+
+        layer3_features.append(layer3array)
+
+        fetchedarray = doc['fc_descriptor']
+
+        fcarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        fcarray = np.array(fcarray)
+
+        fc_features.append(fcarray)
+
+    scipy.io.savemat(output_file+'arrays_odd.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features})  
 
 def ls2(feature_model,k,feature_collection):
 
@@ -2057,9 +2130,9 @@ def task10(label,latentk,feature_model,dimred,latsem,k,odd_feature_collection,fe
 
     except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
 
-        store_by_feature(output_file,feature_collection)
+        store_by_feature(mat_file_path,feature_collection)
 
-        data = scipy.io.loadmat(output_file+'arrays.mat')
+        data = scipy.io.loadmat(mat_file_path+'arrays.mat')
 
         labels = data['labels']
         cm_features = data['cm_features']
@@ -2119,6 +2192,205 @@ def task10(label,latentk,feature_model,dimred,latsem,k,odd_feature_collection,fe
         matching_label = list(sim_la.keys())[0]
 
         similarity_calculator_by_label(matching_label,feature_model,k,odd_feature_collection,feature_collection,similarity_collection,caltech101)
+
+
+###################################################################   PHASE 3 CODE  ###########################################################################
+
+def euclidean(point, data):
+        """
+        Euclidean distance between point & data.
+        Point has dimensions (m,), data has dimensions (n,m), and output will be of size (n,).
+        """
+        return np.sqrt(np.sum((point - data)**2, axis=1))
+class KMeans:
+
+    def __init__(self, n_clusters=8, max_iter=50):
+        self.n_clusters = n_clusters
+        self.max_iter = max_iter
+
+    def fit(self, X_train):
+        # Initialize the centroids, using the "k-means++" method, where a random datapoint is selected as the first,
+        # then the rest are initialized w/ probabilities proportional to their distances to the first
+        # Pick a random point from train data for first centroid
+        self.centroids = [random.choice(X_train)]
+        for _ in range(self.n_clusters-1):
+            # Calculate distances from points to the centroids
+            dists = np.sum([euclidean(centroid, X_train) for centroid in self.centroids], axis=0)
+            # Normalize the distances
+            dists /= np.sum(dists)
+            # Choose remaining points based on their distances
+            new_centroid_idx, = np.random.choice(range(len(X_train)), size=1, p=dists)
+            self.centroids += [X_train[new_centroid_idx]]
+        # This initial method of randomly selecting centroid starts is less effective
+        # min_, max_ = np.min(X_train, axis=0), np.max(X_train, axis=0)
+        # self.centroids = [uniform(min_, max_) for _ in range(self.n_clusters)]
+        # Iterate, adjusting centroids until converged or until passed max_iter
+        iteration = 0
+        prev_centroids = None
+        while np.not_equal(self.centroids, prev_centroids).any() and iteration < self.max_iter:
+            # Sort each datapoint, assigning to nearest centroid
+            sorted_points = [[] for _ in range(self.n_clusters)]
+            print("Iteration "+str(iteration))
+            for idx in tqdm(range(len(X_train))):
+                x = X_train[idx]
+                dists = euclidean(x, self.centroids)
+                centroid_idx = np.argmin(dists)
+                sorted_points[centroid_idx].append(x)
+            # Push current centroids to previous, reassign centroids as mean of the points belonging to them
+            prev_centroids = self.centroids
+            self.centroids = [np.mean(cluster, axis=0) for cluster in sorted_points]
+            for i, centroid in enumerate(self.centroids):
+                if np.isnan(centroid).any():  # Catch any np.nans, resulting from a centroid having no points
+                    self.centroids[i] = prev_centroids[i]
+            iteration += 1
+
+    def evaluate(self, X):
+        centroids = []
+        centroid_idxs = []
+        print("Classifying")
+        for idx in tqdm(range(len(X))):
+            x = X[idx]
+            dists = euclidean(x, self.centroids)
+            centroid_idx = np.argmin(dists)
+            centroids.append(self.centroids[centroid_idx])
+            centroid_idxs.append(centroid_idx)
+        return centroids, centroid_idxs
+
+    
+
+def classifier(cltype,feature_collection,odd_feature_collection,k=0):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    #print(mat_file_path,even_desc_path,odd_desc_path)
+
+    try:
+
+        data = scipy.io.loadmat(str(even_desc_path))
+        labels = data['labels']
+        layer3_features = data['layer3_features']
+
+        odd_data = scipy.io.loadmat(str(odd_desc_path))
+        odd_labels = odd_data['labels']
+        odd_layer3_features = odd_data['layer3_features']
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(str(mat_file_path),feature_collection)
+        store_by_feature_odd(str(mat_file_path),odd_feature_collection)
+
+        data = scipy.io.loadmat(str(even_desc_path))
+        labels = data['labels']
+        layer3_features = data['layer3_features']
+
+        odd_data = scipy.io.loadmat(str(odd_desc_path))
+        odd_labels = odd_data['labels']
+        odd_layer3_features = odd_data['layer3_features']
+        
+    if cltype == "Nearest Neighbors":
+
+        kmeans = KMeans(n_clusters=k)
+        kmeans.fit(layer3_features)
+        # View results
+        class_centers, classification = kmeans.evaluate(layer3_features)
+        centroid_dict = {}
+        centroid_label_vote = {}
+        centroid_label_mapping = {}
+
+        print("Taking Label Vote")
+        for idx in tqdm(range(len(class_centers))):
+            cluster_id = int(classification[idx])
+
+            if cluster_id not in centroid_dict.keys():
+                centroid_dict[cluster_id] = class_centers[idx]
+
+            label = np.where(labels[idx]==1)[0][0]
+
+            if cluster_id in centroid_label_vote.keys():
+                if label in centroid_label_vote[cluster_id]:
+                    centroid_label_vote[cluster_id][label]+=1
+                else:
+                    centroid_label_vote[cluster_id][label]=1
+            else:
+                centroid_label_vote[cluster_id] = {label: 1}
+        
+        for key in centroid_label_vote.keys():
+            centroid_label_mapping[key] = max(centroid_label_vote[key],key = centroid_label_vote[key].get)
+
+        centroid_label_mapping = {key:value for key, value in sorted(centroid_label_mapping.items(), key=lambda item: int(item[0]))}
+        print("Centroid to label mapping:")
+        print(centroid_label_mapping)
+
+        print("Even features")
+        print(type(layer3_features),layer3_features.shape)
+
+        print("Odd features")
+        print(type(odd_layer3_features),odd_layer3_features.shape)
+
+        class_centers,classification = kmeans.evaluate(odd_layer3_features)
+
+        true_labels = []
+        
+        for idx in range(len(odd_labels)):
+            true_labels.append(np.where(labels[idx]==1)[0][0])
+
+        predictions = []
+
+        confusion_matrix = np.zeros((101,101))
+        print(confusion_matrix.shape)
+
+        for idx in range(len(classification)):
+            c = int(classification[idx])
+            predictions.append(centroid_label_mapping[int(c)])
+
+            l = int(true_labels[idx])
+            confusion_matrix[l][c]+=1
+
+        labelwise_metrics = {}
+        for idx in range(101):
+            tp = confusion_matrix[idx][idx]
+            fn = sum(confusion_matrix[idx]) - confusion_matrix[idx][idx]
+            tn = 0
+            fp = 0
+            for r in range(101):
+                for c in range(101):
+                    if r!= idx and c!=idx:
+                        tn+=1
+                    if c == idx and r!=idx:
+                        fp+=1
+            precision = tp / (tp+fp)
+            recall = tp / (tp+fn)
+            f1_score = (2*precision*recall) / (precision+recall)
+            labelwise_metrics[idx] = {"Precision":precision,"Recall":recall,"F1-Score":f1_score}
+
+        truecount = 0
+        for idx in range(len(predictions)):
+            if predictions[idx] == true_labels[idx]:
+                truecount+=1
+
+        accuracy = truecount/len(predictions)
+
+        st.write("Accuracy Scores:")
+        st.write("Overall Accuracy: "+str(accuracy))
+        st.write(confusion_matrix)
+
+        """with st.container():
+            for idx in range(101):
+                with st.expander("Label "+str(idx)):
+                    st.write("Precision: "+str(precision))
+                    st.write("Recall: "+str(recall))
+                    st.write("F1-Score: "+str(f1_score))"""
+
+    elif cltype == "Decision Tree":
+        pass
+    elif cltype == "PPR":
+        pass
+
+
 
 
 dataset_size = 8677

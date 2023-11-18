@@ -39,23 +39,21 @@ odd_feature_collection = connect_to_db(dbName,'image_features_odd')
 feature_collection = connect_to_db(dbName,'image_features')
 similarity_collection = connect_to_db(dbName,'image_similarities')
 
-feature_model = st.selectbox(
-        "Select Feature Space",
-        ("Color Moments", "Histograms of Oriented Gradients(HOG)", "ResNet-AvgPool-1024","ResNet-Layer3-1024","ResNet-FC-1000","RESNET"),
-        label_visibility=st.session_state.visibility,
-        disabled=st.session_state.disabled,
-    )
-k = st.number_input('Enter k for Top k Latent Semantics',placeholder="Type a number...",format = "%d",min_value=1,max_value=8676)
-dimred = st.selectbox(
-        "Select Dimensionality Reduction Technique",
-        ("SVD", "NNMF", "LDA","k-Means"),
+option = st.selectbox(
+        "Select Classifier",
+        ("Nearest Neighbors", "Decision Tree", "PPR"),
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
 
+if option == "Nearest Neighbors":
+    k = st.number_input('Enter k for kNN classifier',placeholder="Type a number...",format = "%d",min_value=1,max_value=4338)
+else:
+    k = 0
+
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-        	ls1(feature_model,k,dimred,feature_collection)    	
+            classifier(option,feature_collection,odd_feature_collection,k=k)
 else:
     st.write("")
