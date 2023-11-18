@@ -47,11 +47,13 @@ option = st.selectbox(
     )
 
 if option == "Nearest Neighbors":
-    k = k = st.number_input('Enter k for kNN classifier',placeholder="Type a number...",format = "%d",min_value=1,max_value=4338)
+    k = st.number_input('Enter k for kNN classifier',placeholder="Type a number...",format = "%d",min_value=1,max_value=4338)
+else:
+    k = 0
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-            classifier(option,feature_collection,odd_feature_collection,k=0)
+            classifier(option,feature_collection,odd_feature_collection,k=k)
 else:
     st.write("")
