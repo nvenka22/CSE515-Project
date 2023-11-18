@@ -8,6 +8,10 @@ Phase1/.ipynb_checkpoints/
 
 Phase2/LatentSemantics/arrays.mat
 
+Phase3/LatentSemantics/arrays.mat
+
+Phase3/LatentSemantics/arrays_odd.mat
+
 .vscode/*    
 !.vscode/settings.json
 !.vscode/tasks.json
