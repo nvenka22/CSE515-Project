@@ -2256,6 +2256,127 @@ class KMeans:
             centroid_idxs.append(centroid_idx)
         return centroids, centroid_idxs
 
+class DecisionTreeClassifier:
+    def __init__(self, max_depth=10, ccp_alpha=0.0):
+        self.max_depth = max_depth
+        self.ccp_alpha = ccp_alpha
+
+    def fit(self, X, y,depth = 0):
+        print("Building Decision Tree")
+        self.tree = self._build_tree(X, y, depth)
+
+    def _build_tree(self, X, y, depth):
+        print("Building depth: "+str(depth))
+        num_samples, num_features = X.shape
+        unique_classes = np.unique(y)
+
+        if len(unique_classes) == 1:
+            return {'class': unique_classes[0]}
+
+        if depth == self.max_depth:
+            majority_class = np.argmax(np.bincount(y))
+            return {'class': majority_class}
+
+        if num_samples <= 1:
+            return {'class': y[0]}
+
+        best_split = self._find_best_split(X, y)
+
+        if best_split is None:
+            majority_class = np.argmax(np.bincount(y))
+            return {'class': majority_class}
+
+        left_indices = X[:, best_split['feature']] <= best_split['threshold']
+        right_indices = ~left_indices
+
+        left_subtree = self._build_tree(X[left_indices, :], y[left_indices], depth + 1)
+        right_subtree = self._build_tree(X[right_indices, :], y[right_indices], depth + 1)
+
+        return {
+            'feature': best_split['feature'],
+            'threshold': best_split['threshold'],
+            'left': left_subtree,
+            'right': right_subtree,
+            'y': y  # Store labels in the node
+        }
+
+    def _find_best_split(self, X, y):
+
+        num_samples, num_features = X.shape
+        if num_samples <= 1:
+            return None
+
+        current_impurity = self._calculate_impurity(y)
+
+        best_split = {'feature': None, 'threshold': None, 'impurity_reduction': 0}
+
+        print("Iterations: ")
+        for feature in tqdm(range(num_features)):
+            sorted_indices = np.argpartition(X[:, feature], range(1, num_samples))
+            sorted_X = X[sorted_indices]
+            #print(sorted_indices)
+            sorted_labels = y[sorted_indices]
+
+            for i in range(1, num_samples):
+                if sorted_labels[i] != sorted_labels[i - 1]:
+                    threshold = (sorted_X[i, feature] + sorted_X[i - 1, feature]) / 2
+
+                    left_indices = sorted_X[:, feature] <= threshold
+                    right_indices = ~left_indices
+
+                    left_impurity = self._calculate_impurity(sorted_labels[left_indices])
+                    right_impurity = self._calculate_impurity(sorted_labels[right_indices])
+                    total_impurity = (len(sorted_labels[left_indices]) / num_samples) * left_impurity \
+                                    + (len(sorted_labels[right_indices]) / num_samples) * right_impurity
+                    impurity_reduction = current_impurity - total_impurity
+
+                    if impurity_reduction > best_split['impurity_reduction']:
+                        best_split['feature'] = feature
+                        best_split['threshold'] = threshold
+                        best_split['impurity_reduction'] = impurity_reduction
+
+        return best_split
+
+    def _calculate_impurity(self, y):
+        classes, counts = np.unique(y, return_counts=True)
+        probabilities = counts / len(y)
+        impurity = 1 - np.sum(probabilities ** 2)
+        return impurity
+
+    def predict(self, X):
+        predictions = [self._predict_tree(x, self.tree) for x in X]
+        return np.array(predictions)
+
+    def _predict_tree(self, x, node):
+        if 'class' in node:
+            return node['class']
+        else:
+            if x[node['feature']] <= node['threshold']:
+                return self._predict_tree(x, node['left'])
+            else:
+                return self._predict_tree(x, node['right'])
+
+def get_labelwise_metrics(confusion_matrix):
+    labelwise_metrics = {}
+    for idx in range(101):
+        tp = confusion_matrix[idx][idx]
+        fn = sum(confusion_matrix[idx]) - confusion_matrix[idx][idx]
+        tn = 0
+        fp = 0
+        for r in range(101):
+            for c in range(101):
+                if r!= idx and c!=idx:
+                    tn+=1
+                if c == idx and r!=idx:
+                    fp+=1
+        precision = tp / (tp+fp)
+        recall = tp / (tp+fn)
+        if precision == 0  or recall == 0:
+            f1_score = 0
+        else:
+            f1_score = (2*precision*recall) / (precision+recall)
+        labelwise_metrics[idx] = {"Precision":precision,"Recall":recall,"F1-Score":f1_score}
+    return labelwise_metrics
     
 
 def classifier(cltype,feature_collection,odd_feature_collection,k=0):
@@ -2324,6 +2445,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,k=0):
         centroid_label_mapping = {key:value for key, value in sorted(centroid_label_mapping.items(), key=lambda item: int(item[0]))}
         print("Centroid to label mapping:")
         print(centroid_label_mapping)
+        print(str(len(np.unique(list(centroid_label_mapping.values()))))+" distinct labels present in mapping")
 
         print("Even features")
         print(type(layer3_features),layer3_features.shape)
@@ -2350,22 +2472,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,k=0):
             l = int(true_labels[idx])
             confusion_matrix[l][c]+=1
 
-        labelwise_metrics = {}
-        for idx in range(101):
-            tp = confusion_matrix[idx][idx]
-            fn = sum(confusion_matrix[idx]) - confusion_matrix[idx][idx]
-            tn = 0
-            fp = 0
-            for r in range(101):
-                for c in range(101):
-                    if r!= idx and c!=idx:
-                        tn+=1
-                    if c == idx and r!=idx:
-                        fp+=1
-            precision = tp / (tp+fp)
-            recall = tp / (tp+fn)
-            f1_score = (2*precision*recall) / (precision+recall)
-            labelwise_metrics[idx] = {"Precision":precision,"Recall":recall,"F1-Score":f1_score}
+        labelwise_metrics = get_labelwise_metrics(confusion_matrix)
 
         truecount = 0
         for idx in range(len(predictions)):
@@ -2376,17 +2483,61 @@ def classifier(cltype,feature_collection,odd_feature_collection,k=0):
 
         st.write("Accuracy Scores:")
         st.write("Overall Accuracy: "+str(accuracy))
-        st.write(confusion_matrix)
+        #st.write(confusion_matrix)
 
-        """with st.container():
+        with st.container():
             for idx in range(101):
-                with st.expander("Label "+str(idx)):
-                    st.write("Precision: "+str(precision))
-                    st.write("Recall: "+str(recall))
-                    st.write("F1-Score: "+str(f1_score))"""
+                with st.expander("Label "+str(idx)+": "+get_class_name(idx),expanded = True):
+                    st.write("Precision: "+str(labelwise_metrics[idx]["Precision"]))
+                    st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
+                    st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
 
     elif cltype == "Decision Tree":
-        pass
+
+        model = DecisionTreeClassifier()
+
+        y_train = []
+        
+        for idx in range(len(labels)):
+            y_train.append(np.where(labels[idx]==1)[0][0])
+
+        y_train = np.array(y_train)
+        print(layer3_features.shape,y_train.shape)
+        model.fit(layer3_features, y_train)
+        predictions = model.predict(odd_layer3_features)
+
+        true_labels = []
+        
+        for idx in range(len(odd_labels)):
+            true_labels.append(np.where(labels[idx]==1)[0][0])
+
+        confusion_matrix = np.zeros((101,101))
+        for idx in range(len(predictions)):
+            c = predictions[idx]
+
+            l = int(true_labels[idx])
+            confusion_matrix[l][c]+=1
+
+        labelwise_metrics = get_labelwise_metrics(confusion_matrix)
+
+        truecount = 0
+        for idx in range(len(predictions)):
+            if predictions[idx] == true_labels[idx]:
+                truecount+=1
+
+        accuracy = truecount/len(predictions)
+
+        st.write("Accuracy Scores:")
+        st.write("Overall Accuracy: "+str(accuracy))
+        #st.write(confusion_matrix)
+
+        with st.container():
+            for idx in range(101):
+                with st.expander("Label "+str(idx)+": "+get_class_name(idx),expanded = True):
+                    st.write("Precision: "+str(labelwise_metrics[idx]["Precision"]))
+                    st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
+                    st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
+
     elif cltype == "PPR":
         pass
 
