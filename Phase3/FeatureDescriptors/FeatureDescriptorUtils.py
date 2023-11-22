@@ -2539,8 +2539,6 @@ def pagerank_csr(csr_matrix, teleport_prob=0.15, max_iter=100, tol=1e-6,personal
         # Apply teleportation
         pagerank_new = teleport_prob / n + (1 - teleport_prob) * pagerank_new
 
-        pagerank_new/=np.sum(pagerank_new)
-
         if personalization is not None:
             pagerank_new+=personalization
 
@@ -2574,6 +2572,11 @@ class PersonalizedPageRankClassifier:
         
         total_score = sum(pagerank_vector)
         normalized_scores = [score / total_score for score in pagerank_vector]
+
+        if personalization is not None:
+            normalized_scores+=personalization
+            total_score = sum(normalized_scores)
+            normalized_scores = [score / total_score for score in normalized_scores]
         
         # Store the computed pagerank_vector
         self.pagerank_vector = normalized_scores
@@ -2854,7 +2857,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
             #print("Scores present for "+str(len(scores.keys()))+" images")
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
 
             top_k_even_indices = list(even_scores.keys())
 
@@ -2886,7 +2889,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
             #print("Scores present for "+str(len(scores.keys()))+" images")
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
 
             top_k_even_indices = list(even_scores.keys())
 
