@@ -37,6 +37,8 @@ from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
 from pathlib import Path
+from collections import defaultdict
+import copyreg
 
 def load_pickle_file(file_path):
     if os.path.exists(file_path):
@@ -2197,52 +2199,68 @@ def task10(label,latentk,feature_model,dimred,latsem,k,odd_feature_collection,fe
 ###################################################################   PHASE 3 CODE  ###########################################################################
 
 def euclidean(point, data):
-        """
-        Euclidean distance between point & data.
-        Point has dimensions (m,), data has dimensions (n,m), and output will be of size (n,).
-        """
-        return np.sqrt(np.sum((point - data)**2, axis=1))
+        dists = []
+        for d in data:
+            dists.append(np.sqrt(np.sum((point - d)**2)))
+        return dists
+
 class KMeans:
 
-    def __init__(self, n_clusters=8, max_iter=50):
+    def __init__(self,collection, n_clusters=8, max_iter=50):
         self.n_clusters = n_clusters
         self.max_iter = max_iter
+        self.collection = collection
 
     def fit(self, X_train):
-        # Initialize the centroids, using the "k-means++" method, where a random datapoint is selected as the first,
-        # then the rest are initialized w/ probabilities proportional to their distances to the first
-        # Pick a random point from train data for first centroid
-        self.centroids = [random.choice(X_train)]
-        for _ in range(self.n_clusters-1):
-            # Calculate distances from points to the centroids
-            dists = np.sum([euclidean(centroid, X_train) for centroid in self.centroids], axis=0)
-            # Normalize the distances
-            dists /= np.sum(dists)
-            # Choose remaining points based on their distances
-            new_centroid_idx, = np.random.choice(range(len(X_train)), size=1, p=dists)
-            self.centroids += [X_train[new_centroid_idx]]
-        # This initial method of randomly selecting centroid starts is less effective
-        # min_, max_ = np.min(X_train, axis=0), np.max(X_train, axis=0)
-        # self.centroids = [uniform(min_, max_) for _ in range(self.n_clusters)]
-        # Iterate, adjusting centroids until converged or until passed max_iter
-        iteration = 0
-        prev_centroids = None
-        while np.not_equal(self.centroids, prev_centroids).any() and iteration < self.max_iter:
-            # Sort each datapoint, assigning to nearest centroid
-            sorted_points = [[] for _ in range(self.n_clusters)]
-            print("Iteration "+str(iteration))
-            for idx in tqdm(range(len(X_train))):
-                x = X_train[idx]
-                dists = euclidean(x, self.centroids)
-                centroid_idx = np.argmin(dists)
-                sorted_points[centroid_idx].append(x)
-            # Push current centroids to previous, reassign centroids as mean of the points belonging to them
-            prev_centroids = self.centroids
-            self.centroids = [np.mean(cluster, axis=0) for cluster in sorted_points]
-            for i, centroid in enumerate(self.centroids):
-                if np.isnan(centroid).any():  # Catch any np.nans, resulting from a centroid having no points
-                    self.centroids[i] = prev_centroids[i]
-            iteration += 1
+        print(X_train.shape)
+
+        mod_path = Path(__file__).parent.parent
+        pkl_file_path = str(mod_path)+"/Classifiers/kNN/"
+        output_file = pkl_file_path+str(self.n_clusters)+".pkl"
+
+        if os.path.exists(output_file):
+            self.centroids, train_centroid_idxs = load_pickle_file(output_file)
+
+        else:
+
+            self.centroids = []
+            centroid_idxs = []
+            split = int(X_train.shape[0]/self.n_clusters)
+            for idx in range(0,X_train.shape[0],split):
+                centroid_idxs.append(idx)
+                self.centroids.append(X_train[idx])
+                if len(self.centroids)==self.n_clusters:
+                    break
+
+            print("Number of centroids picked: "+str(len(self.centroids)))
+
+            iteration = 0
+            prev_centroids = None
+            while np.not_equal(self.centroids, prev_centroids).any() and iteration < self.max_iter:
+                sorted_points = [[] for _ in range(self.n_clusters)]
+                print("Iteration " + str(iteration))
+                for idx in tqdm(range(len(X_train))):
+                    x = X_train[idx]
+                    dists = euclidean(x, self.centroids)
+                    centroid_idx = np.argmin(dists)
+                    sorted_points[centroid_idx].append(x)
+
+                print("Cluster Sizes: ")
+                for cluster in sorted_points:
+                    print(len(cluster))
+
+                prev_centroids = self.centroids
+                self.centroids = [np.mean(cluster, axis=0) if cluster else np.nan*np.zeros_like(self.centroids[0])
+                                for cluster in sorted_points]
+
+                iteration += 1
+
+            # Metrics for the training set using the last iteration centroids
+            train_centroid_idxs = np.array([np.argmin(euclidean(x, self.centroids)) for x in X_train])
+
+            pickle.dump((self.centroids,train_centroid_idxs), open(output_file, 'wb+'))
+        
+        return self.centroids, train_centroid_idxs
 
     def evaluate(self, X):
         centroids = []
@@ -2255,108 +2273,328 @@ class KMeans:
             centroids.append(self.centroids[centroid_idx])
             centroid_idxs.append(centroid_idx)
         return centroids, centroid_idxs
+    
+class Node:
+    def __init__(self, class_values, min_size, search_size, datanode=None, split_feature_index=None, split_value=None, subnodes=None):
+        self.datanode = datanode
+        self.split_feature_index = split_feature_index
+        self.split_value = split_value
+        self.subnodes = subnodes
+        self.class_values = class_values
+        self.min_size = min_size
+        self.search_size = search_size
 
-class DecisionTreeClassifier:
-    def __init__(self, max_depth=10, ccp_alpha=0.0):
-        self.max_depth = max_depth
-        self.ccp_alpha = ccp_alpha
+    def __str__(self):
+        return f'split_feature_index = {self.split_feature_index}, split_value = {self.split_value}'
 
-    def fit(self, X, y,depth = 0):
-        print("Building Decision Tree")
-        self.tree = self._build_tree(X, y, depth)
-
-    def _build_tree(self, X, y, depth):
-        print("Building depth: "+str(depth))
-        num_samples, num_features = X.shape
-        unique_classes = np.unique(y)
-
-        if len(unique_classes) == 1:
-            return {'class': unique_classes[0]}
-
-        if depth == self.max_depth:
-            majority_class = np.argmax(np.bincount(y))
-            return {'class': majority_class}
-
-        if num_samples <= 1:
-            return {'class': y[0]}
-
-        best_split = self._find_best_split(X, y)
-
-        if best_split is None:
-            majority_class = np.argmax(np.bincount(y))
-            return {'class': majority_class}
-
-        left_indices = X[:, best_split['feature']] <= best_split['threshold']
-        right_indices = ~left_indices
-
-        left_subtree = self._build_tree(X[left_indices, :], y[left_indices], depth + 1)
-        right_subtree = self._build_tree(X[right_indices, :], y[right_indices], depth + 1)
-
-        return {
-            'feature': best_split['feature'],
-            'threshold': best_split['threshold'],
-            'left': left_subtree,
-            'right': right_subtree,
-            'y': y  # Store labels in the node
-        }
-
-    def _find_best_split(self, X, y):
-
-        num_samples, num_features = X.shape
-        if num_samples <= 1:
+    def splited_datanode(self):
+        dataset = self.datanode
+        split_index = self.split_feature_index
+        split_value = self.split_value
+        if dataset is None or split_index <0 or split_value is None:
             return None
 
-        current_impurity = self._calculate_impurity(y)
+        dataleft = [row for row in dataset if row[split_index] <= split_value]
+        dataright = [row for row in dataset if row[split_index] > split_value]
 
-        best_split = {'feature': None, 'threshold': None, 'impurity_reduction': 0}
+        return dataleft, dataright
 
-        print("Iterations: ")
-        for feature in tqdm(range(num_features)):
-            sorted_indices = np.argpartition(X[:, feature], range(1, num_samples))
-            sorted_X = X[sorted_indices]
-            #print(sorted_indices)
-            sorted_labels = y[sorted_indices]
+    def gini(self):
+        n_instances = float(len(self.datanode))
+        subsets = self.splited_datanode()
+        if subsets is None:
+            return 999.999
 
-            for i in range(1, num_samples):
-                if sorted_labels[i] != sorted_labels[i - 1]:
-                    threshold = (sorted_X[i, feature] + sorted_X[i - 1, feature]) / 2
+        gini = 0.0
+        for sub in subsets:
+            n_sub = float(len(sub))
+            if n_sub == 0.0:
+                continue
 
-                    left_indices = sorted_X[:, feature] <= threshold
-                    right_indices = ~left_indices
+            l = [row[-1] for row in sub]
+            g = 0.0
 
-                    left_impurity = self._calculate_impurity(sorted_labels[left_indices])
-                    right_impurity = self._calculate_impurity(sorted_labels[right_indices])
-                    total_impurity = (len(sorted_labels[left_indices]) / num_samples) * left_impurity \
-                                    + (len(sorted_labels[right_indices]) / num_samples) * right_impurity
-                    impurity_reduction = current_impurity - total_impurity
+            for c in self.class_values:
+                g += (float(l.count(c)) / n_sub) ** 2
 
-                    if impurity_reduction > best_split['impurity_reduction']:
-                        best_split['feature'] = feature
-                        best_split['threshold'] = threshold
-                        best_split['impurity_reduction'] = impurity_reduction
+            gini += (n_sub / n_instances) * (1.0 - g)
 
-        return best_split
+        if(gini<0 or gini>1):print("Gini Calculation Wrong")
+        return gini
 
-    def _calculate_impurity(self, y):
-        classes, counts = np.unique(y, return_counts=True)
-        probabilities = counts / len(y)
-        impurity = 1 - np.sum(probabilities ** 2)
-        return impurity
+    def isleaf(self):
+        data = self.datanode
+        if len(data) < self.min_size:
+            return True
+        y = [row[-1] for row in data]
+
+        for c in self.class_values:
+            if y.count(c) == len(data):
+                return True
+        return False
+    
+def reduce_node(node):
+    return (recreate_node, (node.class_values, node.min_size, node.search_size, node.datanode, node.split_feature_index, node.split_value, node.subnodes))
+
+copyreg.pickle(Node, reduce_node)
+
+
+def recreate_node(class_values, min_size, search_size, datanode=None, split_feature_index=None, split_value=None, subnodes=None):
+    node = Node(class_values, min_size, search_size, datanode, split_feature_index, split_value, subnodes)
+    return node
+
+
+# Register the reduce_node function with copyreg
+copyreg.pickle(Node, reduce_node)
+    
+def save_tree(node,path):
+    pickle.dump(node, open(path, 'wb+'))
+
+def split_node(node):
+
+    rand_features = np.random.choice(range(len(node.datanode[0])-1),size = node.search_size,replace=False)
+    dataset = [row for row in node.datanode]
+    score = 999
+    split_index = -1
+    split_value = None
+
+    print("Splitting Node")
+    for i in tqdm(rand_features):
+        for row in dataset:
+            node.split_feature_index = i
+            node.split_value = row[i]
+            gini = node.gini()
+            if gini < score:
+                #print("feature: "+str(rand_feature)+" gini: "+str(gini))
+                score = gini
+                split_index = i
+                split_value = row[i]
+            if gini<0.5:
+                break
+        if gini<0.5:
+            break
+
+    node.split_feature_index = split_index
+    node.split_value = split_value
+    left, right = node.splited_datanode()
+
+    if left and right:
+        nodeleft = Node(node.class_values, node.min_size, node.search_size,datanode=left)
+        noderight = Node(node.class_values, node.min_size, node.search_size,datanode=right)
+        node.subnodes = [nodeleft, noderight]
+        print("Split occurred. Node:", node)
+    else:
+        print("No split occurred. Node:", node)
+
+def split(node):
+    split_node(node)
+    if node.subnodes and not node.subnodes[0].isleaf():
+            split(node.subnodes[0])
+    if node.subnodes and not node.subnodes[1].isleaf():
+        split(node.subnodes[1])
+    return
+
+def print_tree(root):
+    print(root)
+    print("label:"+str(int(root.datanode[0][-1])))
+    if root.subnodes:
+        if len(root.subnodes)>0:
+            print_tree(root.subnodes[0])
+        if len(root.subnodes)>1:
+            print_tree(root.subnodes[1])
+
+def classify(root, test):
+
+    if root.isleaf():
+        return int(root.datanode[0][-1])
+        
+    if root.subnodes:
+        if len(root.subnodes)>0:
+            #print(root.split_feature_index)
+            if test[root.split_feature_index] <= root.split_value:
+                return classify(root.subnodes[0], test)
+            elif len(root.subnodes)>1:
+                return classify(root.subnodes[1], test)
+        
+
+class PPRClassifier:
+
+    def __init__(self, num_projections = 100, gamma=1.0, threshold=5.0):
+        self.num_projections = num_projections
+        self.gamma = gamma
+        self.threshold = threshold
+        self.projections = None
+
+    def rbf_kernel(self, X1, X2):
+        # Radial Basis Function (RBF) kernel
+        pairwise_sq_dists = np.sum(X1**2, axis=1, keepdims=True) + np.sum(X2**2, axis=1) - 2 * np.dot(X1, X2.T)
+        return np.exp(-self.gamma * pairwise_sq_dists)
+
+    def fit(self, X, y):
+        # Generate random projections
+        self.projections = np.random.normal(size=(X.shape[0], self.num_projections))
+
+        # Kernelize the data using RBF kernel
+        X_kernel = self.rbf_kernel(X, X)
+
+        # Ensure y is a 1D array
+        y = y.flatten()
+
+        # Initialize weights randomly
+        weights = np.random.normal(size=(X.shape[0], self.num_projections))
+
+        # Perform gradient ascent to optimize weights
+        for _ in tqdm(range(100)):
+            # Compute the projection pursuit function
+            projection_pursuit = X_kernel @ weights
+
+            # Update weights based on the derivative of the projection pursuit function
+            weights += 0.01 * (X_kernel.T @ (projection_pursuit - y[:, np.newaxis]))
+
+        self.weights = weights
 
     def predict(self, X):
-        predictions = [self._predict_tree(x, self.tree) for x in X]
-        return np.array(predictions)
+        # Kernelize the test data
+        X_kernel = self.rbf_kernel(X, X)
 
-    def _predict_tree(self, x, node):
-        if 'class' in node:
-            return node['class']
-        else:
-            if x[node['feature']] <= node['threshold']:
-                return self._predict_tree(x, node['left'])
-            else:
-                return self._predict_tree(x, node['right'])
+        # Compute the projection pursuit function for the test data
+        projection_pursuit = X_kernel @ self.weights[:X_kernel.shape[0],:]
 
-def get_labelwise_metrics(confusion_matrix):
+        # Classify based on a threshold
+        predictions = np.where(projection_pursuit > self.threshold, 1, -1)
+
+        return list(predictions)
+    
+class kNN:
+
+    def __init__(self, collection, labels,k = 10):
+        self.k = k
+        self.collection = collection
+        self.labels = labels
+
+    def predict(self):
+
+        classifications = []
+
+        for idx in tqdm(range(1,8677,2)):
+
+            scores = self.collection.find_one({'_id':idx})['avgpool_descriptor']
+
+            even_scores = {}
+
+            for imgid in scores.keys():
+                if int(imgid)%2 == 0:
+                    even_scores[int(imgid)] = scores[imgid]
+
+            #print("Scores present for "+str(len(scores.keys()))+" images")
+
+            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-self.k:])
+
+            top_k_even_indices = list(even_scores.keys())
+
+            #print("Most similar images: "+str(top_k_even_indices))
+
+            label_votes = {}
+            for even_index in top_k_even_indices:
+
+                l = np.where(self.labels[int(even_index/2)]==1)[0][0]
+
+                if l in label_votes.keys():
+                    label_votes[l]+=1
+                else:
+                    label_votes[l]=1
+
+            prediction = max(label_votes, key=label_votes.get)
+            #print("Image ID: "+str(idx)+" Label:"+str(prediction))
+
+            classifications.append(prediction)
+        
+        return classifications
+    
+class CSRMatrix:
+    def __init__(self, values, row_ptr, col_indices, shape):
+        self.values = values
+        self.row_ptr = row_ptr
+        self.col_indices = col_indices
+        self.shape = shape
+
+def pagerank_csr(csr_matrix, teleport_prob=0.15, max_iter=100, tol=1e-6,personalization = None):
+    n = csr_matrix.shape[0]
+    num_nonzero = len(csr_matrix.values)
+
+    # Initialize PageRank scores
+    pagerank = np.ones(n) / n
+
+    for _ in tqdm(range(max_iter)):
+        pagerank_new = np.zeros(n)
+
+        for i in range(n):
+            start_idx = csr_matrix.row_ptr[i]
+            end_idx = csr_matrix.row_ptr[i + 1]
+
+            for j in range(start_idx, end_idx):
+                col_idx = csr_matrix.col_indices[j]
+                pagerank_new[col_idx] += (pagerank[i] * csr_matrix.values[j])
+
+        # Apply teleportation
+        pagerank_new = teleport_prob / n + (1 - teleport_prob) * pagerank_new
+
+        pagerank_new/=np.sum(pagerank_new)
+
+        if personalization is not None:
+            pagerank_new+=personalization
+
+        # Check for convergence
+        if np.linalg.norm(pagerank_new - pagerank, 1) < tol:
+            break
+
+        pagerank = pagerank_new
+    print()
+    return pagerank
+
+class PersonalizedPageRankClassifier:
+    def __init__(self, teleport_prob=0.15, max_iter=100, tol=1e-6):
+        self.teleport_prob = teleport_prob
+        self.max_iter = max_iter
+        self.tol = tol
+        self.classifiers = []
+
+    def fit(self, X_train, y_train, personalization = None):
+        self.classes_ = np.unique(y_train)
+
+        values = [val for row in X_train for val in row if val != 0]
+        row_ptr = [0] + np.cumsum(np.sum(X_train != 0, axis=1)).tolist()
+        col_indices = [col_idx for row in X_train for col_idx in np.where(row != 0)[0]]
+        shape = X_train.shape
+        csr_matrix = CSRMatrix(values, row_ptr, col_indices, shape)
+
+        # Compute personalized PageRank for the entire training set
+        pagerank_vector = pagerank_csr(csr_matrix, teleport_prob=self.teleport_prob,
+                                    max_iter=self.max_iter, tol=self.tol, personalization=personalization)
+        
+        total_score = sum(pagerank_vector)
+        normalized_scores = [score / total_score for score in pagerank_vector]
+        
+        # Store the computed pagerank_vector
+        self.pagerank_vector = normalized_scores
+
+        #print(self.pagerank_vector)
+
+    def predict(self, X_test, train_labels):
+        predictions = []
+
+        for sample in X_test:
+            
+            sample_pagerank = sample * self.pagerank_vector
+
+            #print(sample_pagerank.shape)
+
+            predictions.append(train_labels[np.argmax(sample_pagerank)])
+
+        return predictions
+                
+def display_scores(confusion_matrix,true_labels,predictions):
+
     labelwise_metrics = {}
     for idx in range(101):
         tp = confusion_matrix[idx][idx]
@@ -2371,15 +2609,32 @@ def get_labelwise_metrics(confusion_matrix):
                     fp+=1
         precision = tp / (tp+fp)
         recall = tp / (tp+fn)
-        if precision == 0  or recall == 0:
+        if precision == 0 or recall == 0:
             f1_score = 0
         else:
             f1_score = (2*precision*recall) / (precision+recall)
         labelwise_metrics[idx] = {"Precision":precision,"Recall":recall,"F1-Score":f1_score}
-    return labelwise_metrics
-    
 
-def classifier(cltype,feature_collection,odd_feature_collection,k=0):
+    truecount = 0
+    for idx in range(len(predictions)):
+        if predictions[idx] == true_labels[idx]:
+            truecount+=1
+ 
+    accuracy = truecount/len(predictions)
+
+    st.write("Accuracy Scores:")
+    st.write("Overall Accuracy: "+str(accuracy))
+    #st.write(confusion_matrix)
+
+    with st.container():
+        for idx in range(101):
+            with st.expander("Label "+str(idx),expanded = True):
+                st.write("Precision: "+str(labelwise_metrics[idx]['Precision']))
+                st.write("Recall: "+str(labelwise_metrics[idx]['Recall']))
+                st.write("F1-Score: "+str(labelwise_metrics[idx]['F1-Score']))
+
+
+def classifier(cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -2412,22 +2667,22 @@ def classifier(cltype,feature_collection,odd_feature_collection,k=0):
         odd_labels = odd_data['labels']
         odd_layer3_features = odd_data['layer3_features']
         
-    if cltype == "Nearest Neighbors":
+    if cltype == "k-Means":
 
-        kmeans = KMeans(n_clusters=k)
-        kmeans.fit(layer3_features)
-        # View results
-        class_centers, classification = kmeans.evaluate(layer3_features)
+        kmeans = KMeans(similarity_collection,n_clusters=k)
+        class_centers, classification = kmeans.fit(layer3_features)
         centroid_dict = {}
         centroid_label_vote = {}
         centroid_label_mapping = {}
 
+        print(class_centers,classification)
+
         print("Taking Label Vote")
-        for idx in tqdm(range(len(class_centers))):
+        for idx in tqdm(range(len(classification))):
             cluster_id = int(classification[idx])
 
             if cluster_id not in centroid_dict.keys():
-                centroid_dict[cluster_id] = class_centers[idx]
+                centroid_dict[cluster_id] = class_centers[cluster_id]
 
             label = np.where(labels[idx]==1)[0][0]
 
@@ -2445,7 +2700,9 @@ def classifier(cltype,feature_collection,odd_feature_collection,k=0):
         centroid_label_mapping = {key:value for key, value in sorted(centroid_label_mapping.items(), key=lambda item: int(item[0]))}
         print("Centroid to label mapping:")
         print(centroid_label_mapping)
-        print(str(len(np.unique(list(centroid_label_mapping.values()))))+" distinct labels present in mapping")
+
+        st.write("Clusters assigned to labels:")
+        st.write(list(centroid_label_mapping.values()))
 
         print("Even features")
         print(type(layer3_features),layer3_features.shape)
@@ -2453,100 +2710,219 @@ def classifier(cltype,feature_collection,odd_feature_collection,k=0):
         print("Odd features")
         print(type(odd_layer3_features),odd_layer3_features.shape)
 
-        class_centers,classification = kmeans.evaluate(odd_layer3_features)
+        odd_class_centers,odd_classification = kmeans.evaluate(odd_layer3_features)
 
         true_labels = []
         
         for idx in range(len(odd_labels)):
-            true_labels.append(np.where(labels[idx]==1)[0][0])
+            true_labels.append(np.where(odd_labels[idx]==1)[0][0])
 
         predictions = []
 
         confusion_matrix = np.zeros((101,101))
         print(confusion_matrix.shape)
 
-        for idx in range(len(classification)):
-            c = int(classification[idx])
+        for idx in range(len(odd_classification)):
+            c = int(odd_classification[idx])
             predictions.append(centroid_label_mapping[int(c)])
 
             l = int(true_labels[idx])
-            confusion_matrix[l][c]+=1
+            confusion_matrix[l][centroid_label_mapping[int(c)]]+=1
 
-        labelwise_metrics = get_labelwise_metrics(confusion_matrix)
+        with st.expander("Confusion Matrix for Classification"):
+            st.write(confusion_matrix)
 
-        truecount = 0
-        for idx in range(len(predictions)):
-            if predictions[idx] == true_labels[idx]:
-                truecount+=1
-
-        accuracy = truecount/len(predictions)
-
-        st.write("Accuracy Scores:")
-        st.write("Overall Accuracy: "+str(accuracy))
-        #st.write(confusion_matrix)
-
-        with st.container():
-            for idx in range(101):
-                with st.expander("Label "+str(idx)+": "+get_class_name(idx),expanded = True):
-                    st.write("Precision: "+str(labelwise_metrics[idx]["Precision"]))
-                    st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
-                    st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
+        display_scores(confusion_matrix,true_labels,predictions)
 
     elif cltype == "Decision Tree":
 
-        model = DecisionTreeClassifier()
+        pkl_file_path = str(mod_path)+"/Classifiers/DecisionTree/"
+        min_size = 1
+        search_size = 20
+        output_file = pkl_file_path+str(min_size)+"_"+str(search_size)+".pkl"
 
-        y_train = []
+        if os.path.exists(output_file):
+
+            root = load_pickle_file(output_file)
+
+        else:
+
+            input = []
+
+            for index in range(layer3_features.shape[0]):
+                row = list(layer3_features[index])
+                row.append(np.where(labels[index]==1)[0][0])
+                input.append(row)
+
+            class_values=set([row[-1] for row in input]) #class labels
+            #print("Class Values: "+str(class_values))
+            root = Node(class_values,min_size,search_size,datanode = input)
+            #print(root, len(root.datanode))
+            print("Creating Tree")
+            split(root)
+            save_tree(root,output_file)
+
+        print("Tree Nodes")
+        print_tree(root)
         
-        for idx in range(len(labels)):
-            y_train.append(np.where(labels[idx]==1)[0][0])
+        test_set = []
 
-        y_train = np.array(y_train)
-        print(layer3_features.shape,y_train.shape)
-        model.fit(layer3_features, y_train)
-        predictions = model.predict(odd_layer3_features)
+        for index in range(odd_layer3_features.shape[0]):
+            test_set.append(list(odd_layer3_features[index]))
 
         true_labels = []
         
         for idx in range(len(odd_labels)):
-            true_labels.append(np.where(labels[idx]==1)[0][0])
+            true_labels.append(np.where(odd_labels[idx]==1)[0][0])
+
+        predictions = []
+        
+        print("Classifying")
+        for test in tqdm(test_set):
+            predictions.append(classify(root, test))
+
+        #print(classifications)
 
         confusion_matrix = np.zeros((101,101))
+
         for idx in range(len(predictions)):
-            c = predictions[idx]
 
             l = int(true_labels[idx])
+            c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        labelwise_metrics = get_labelwise_metrics(confusion_matrix)
+        with st.expander("Confusion Matrix for Classification"):
+            st.write(confusion_matrix)
 
-        truecount = 0
+        display_scores(confusion_matrix,true_labels,predictions)
+
+    elif cltype == "Nearest Neighbors":
+
+        even_labels = []
+        
+        for idx in range(len(labels)):
+            even_labels.append(np.where(labels[idx]==1)[0][0])
+
+        nnclassifier = kNN(similarity_collection,labels,k = k)
+
+        true_labels = []
+        
+        for idx in range(len(odd_labels)):
+            true_labels.append(np.where(odd_labels[idx]==1)[0][0])
+
+        predictions = nnclassifier.predict()
+
+        confusion_matrix = np.zeros((101,101))
+
         for idx in range(len(predictions)):
-            if predictions[idx] == true_labels[idx]:
-                truecount+=1
 
-        accuracy = truecount/len(predictions)
+            l = int(true_labels[idx])
+            c = predictions[idx]
+            confusion_matrix[l][c]+=1
 
-        st.write("Accuracy Scores:")
-        st.write("Overall Accuracy: "+str(accuracy))
-        #st.write(confusion_matrix)
+        with st.expander("Confusion Matrix for Classification"):
+            st.write(confusion_matrix)
 
-        with st.container():
-            for idx in range(101):
-                with st.expander("Label "+str(idx)+": "+get_class_name(idx),expanded = True):
-                    st.write("Precision: "+str(labelwise_metrics[idx]["Precision"]))
-                    st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
-                    st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
+        display_scores(confusion_matrix,true_labels,predictions)
 
     elif cltype == "PPR":
-        pass
 
+        even_labels = []
+        
+        for idx in range(len(labels)):
+            even_labels.append(np.where(labels[idx]==1)[0][0])
 
+        ppr = PersonalizedPageRankClassifier(teleport_prob=0.15)
 
+        adj_matrix = []
 
+        personalization = []
+
+        print("Building Adjacency Matrix")
+        for idx in tqdm(range(0,8677,2)):
+
+            scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+
+            even_scores = {}
+            total_score = 0
+            for imgid in scores.keys():
+                if int(imgid)%2 == 0:
+                    even_scores[int(imgid)] = scores[imgid]
+                    total_score+=scores[imgid]
+
+            personalization.append(total_score/4339)
+
+            #print("Scores present for "+str(len(scores.keys()))+" images")
+
+            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+
+            top_k_even_indices = list(even_scores.keys())
+
+            row = np.zeros(4339)
+
+            for indice in top_k_even_indices:
+                row[int(indice/2)] = 1
+
+            adj_matrix.append(row)
+
+        adj_matrix = np.array(adj_matrix)
+        even_labels = np.array(even_labels)
+        print("Adjacency Matrix: "+str(adj_matrix.shape)+" Labels: "+str(even_labels.shape))
+
+        ppr.fit(adj_matrix,even_labels,personalization=np.array(personalization))
+
+        odd_adj_matrix = []
+
+        print("Building Adjacency Matrix")
+        for idx in tqdm(range(1,8677,2)):
+
+            scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+
+            even_scores = {}
+
+            for imgid in scores.keys():
+                if int(imgid)%2 == 0:
+                    even_scores[int(imgid)] = scores[imgid]
+
+            #print("Scores present for "+str(len(scores.keys()))+" images")
+
+            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+
+            top_k_even_indices = list(even_scores.keys())
+
+            row = np.zeros(4339)
+
+            for indice in top_k_even_indices:
+                row[int(indice/2)] = 1
+
+            odd_adj_matrix.append(row)
+
+        odd_adj_matrix = np.array(odd_adj_matrix)
+
+        predictions = ppr.predict(odd_adj_matrix,even_labels)
+
+        confusion_matrix = np.zeros((101,101))
+
+        true_labels = []
+        
+        for idx in range(len(odd_labels)):
+            true_labels.append(np.where(odd_labels[idx]==1)[0][0])
+
+        for idx in range(len(predictions)):
+
+            l = int(true_labels[idx])
+            c = predictions[idx]
+            confusion_matrix[l][c]+=1
+
+        with st.expander("Confusion Matrix for Classification"):
+            st.write(confusion_matrix)
+
+        display_scores(confusion_matrix,true_labels,predictions)
+        
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
 dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]
+p = 512
 
 data = {
 	0: "Faces", 1: "Faces_easy", 2: "Leopards", 3: "Motorbikes", 4: "accordion", 5: "airplanes", 6: "anchor", 7: "ant", 8: "barrel", 9: "bass",
