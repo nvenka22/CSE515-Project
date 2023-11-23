@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn import preprocessing as p
 import pickle
@@ -2274,149 +2275,6 @@ class KMeans:
             centroid_idxs.append(centroid_idx)
         return centroids, centroid_idxs
     
-class Node:
-    def __init__(self, class_values, min_size, search_size, datanode=None, split_feature_index=None, split_value=None, subnodes=None):
-        self.datanode = datanode
-        self.split_feature_index = split_feature_index
-        self.split_value = split_value
-        self.subnodes = subnodes
-        self.class_values = class_values
-        self.min_size = min_size
-        self.search_size = search_size
-
-    def __str__(self):
-        return f'split_feature_index = {self.split_feature_index}, split_value = {self.split_value}'
-
-    def splited_datanode(self):
-        dataset = self.datanode
-        split_index = self.split_feature_index
-        split_value = self.split_value
-        if dataset is None or split_index <0 or split_value is None:
-            return None
-
-        dataleft = [row for row in dataset if row[split_index] <= split_value]
-        dataright = [row for row in dataset if row[split_index] > split_value]
-
-        return dataleft, dataright
-
-    def gini(self):
-        n_instances = float(len(self.datanode))
-        subsets = self.splited_datanode()
-        if subsets is None:
-            return 999.999
-
-        gini = 0.0
-        for sub in subsets:
-            n_sub = float(len(sub))
-            if n_sub == 0.0:
-                continue
-
-            l = [row[-1] for row in sub]
-            g = 0.0
-
-            for c in self.class_values:
-                g += (float(l.count(c)) / n_sub) ** 2
-
-            gini += (n_sub / n_instances) * (1.0 - g)
-
-        if(gini<0 or gini>1):print("Gini Calculation Wrong")
-        return gini
-
-    def isleaf(self):
-        data = self.datanode
-        if len(data) < self.min_size:
-            return True
-        y = [row[-1] for row in data]
-
-        for c in self.class_values:
-            if y.count(c) == len(data):
-                return True
-        return False
-    
-def reduce_node(node):
-    return (recreate_node, (node.class_values, node.min_size, node.search_size, node.datanode, node.split_feature_index, node.split_value, node.subnodes))
-
-copyreg.pickle(Node, reduce_node)
-
-
-def recreate_node(class_values, min_size, search_size, datanode=None, split_feature_index=None, split_value=None, subnodes=None):
-    node = Node(class_values, min_size, search_size, datanode, split_feature_index, split_value, subnodes)
-    return node
-
-
-# Register the reduce_node function with copyreg
-copyreg.pickle(Node, reduce_node)
-    
-def save_tree(node,path):
-    pickle.dump(node, open(path, 'wb+'))
-
-def split_node(node):
-
-    rand_features = np.random.choice(range(len(node.datanode[0])-1),size = node.search_size,replace=False)
-    dataset = [row for row in node.datanode]
-    score = 999
-    split_index = -1
-    split_value = None
-
-    print("Splitting Node")
-    for i in tqdm(rand_features):
-        for row in dataset:
-            node.split_feature_index = i
-            node.split_value = row[i]
-            gini = node.gini()
-            if gini < score:
-                #print("feature: "+str(rand_feature)+" gini: "+str(gini))
-                score = gini
-                split_index = i
-                split_value = row[i]
-            if gini<0.5:
-                break
-        if gini<0.5:
-            break
-
-    node.split_feature_index = split_index
-    node.split_value = split_value
-    left, right = node.splited_datanode()
-
-    if left and right:
-        nodeleft = Node(node.class_values, node.min_size, node.search_size,datanode=left)
-        noderight = Node(node.class_values, node.min_size, node.search_size,datanode=right)
-        node.subnodes = [nodeleft, noderight]
-        print("Split occurred. Node:", node)
-    else:
-        print("No split occurred. Node:", node)
-
-def split(node):
-    split_node(node)
-    if node.subnodes and not node.subnodes[0].isleaf():
-            split(node.subnodes[0])
-    if node.subnodes and not node.subnodes[1].isleaf():
-        split(node.subnodes[1])
-    return
-
-def print_tree(root):
-    print(root)
-    print("label:"+str(int(root.datanode[0][-1])))
-    if root.subnodes:
-        if len(root.subnodes)>0:
-            print_tree(root.subnodes[0])
-        if len(root.subnodes)>1:
-            print_tree(root.subnodes[1])
-
-def classify(root, test):
-
-    if root.isleaf():
-        return int(root.datanode[0][-1])
-        
-    if root.subnodes:
-        if len(root.subnodes)>0:
-            #print(root.split_feature_index)
-            if test[root.split_feature_index] <= root.split_value:
-                return classify(root.subnodes[0], test)
-            elif len(root.subnodes)>1:
-                return classify(root.subnodes[1], test)
-        
-
 class PPRClassifier:
 
     def __init__(self, num_projections = 100, gamma=1.0, threshold=5.0):
@@ -2559,6 +2417,7 @@ class PersonalizedPageRankClassifier:
 
     def fit(self, X_train, y_train, personalization = None):
         self.classes_ = np.unique(y_train)
+        self.personalization = personalization
 
         values = [val for row in X_train for val in row if val != 0]
         row_ptr = [0] + np.cumsum(np.sum(X_train != 0, axis=1)).tolist()
@@ -2581,7 +2440,8 @@ class PersonalizedPageRankClassifier:
         # Store the computed pagerank_vector
         self.pagerank_vector = normalized_scores
 
-        #print(self.pagerank_vector)
+        with st.expander("PageRank Values for Training Data"):
+            st.write(self.pagerank_vector)
 
     def predict(self, X_test, train_labels):
         predictions = []
@@ -2595,6 +2455,108 @@ class PersonalizedPageRankClassifier:
             predictions.append(train_labels[np.argmax(sample_pagerank)])
 
         return predictions
+    
+class DecisionTree:
+    def __init__(self, max_depth=None, min_size=1):
+        self.max_depth = max_depth
+        self.min_size = min_size
+
+    def fit(self, X, y, depth=0):
+        # Store training data and labels in the node
+        self.X = X
+        self.y = y
+
+        print("Processing depth: "+str(depth))
+
+        # Check if the node should be a leaf
+        if self.should_stop_splitting(y, depth):
+            self.label = self.most_common_label(y)
+            return
+
+        # Find the best split
+        feature_index, threshold = self.find_best_split(X, y)
+
+        # If no split is found, make it a leaf node
+        if feature_index is None:
+            self.label = self.most_common_label(y)
+            return
+
+        # Split the data and recursively build the tree
+        mask = X[:, feature_index] <= threshold
+        self.left = DecisionTree(self.max_depth, self.min_size)
+        self.left.fit(X[mask], y[mask], depth + 1)
+
+        self.right = DecisionTree(self.max_depth, self.min_size)
+        self.right.fit(X[~mask], y[~mask], depth + 1)
+
+        self.feature_index = feature_index
+        self.threshold = threshold
+
+    def should_stop_splitting(self, y, depth):
+        # Check if the node should be a leaf based on hyperparameters
+        return (self.max_depth is not None and depth == self.max_depth) or len(set(y)) == 1 or len(y) <= self.min_size
+
+    def find_best_split(self, X, y):
+        # Find the best split based on Gini impurity
+        best_gini = float('inf')
+        best_feature_index = None
+        best_threshold = None
+
+        if X.shape[1]>100:
+            search_size = 100
+        else:
+            search_size = X.shape[1]
+        rand_indexes = np.random.choice(range(X.shape[1]),size = search_size, replace=False)
+
+        for feature_index in tqdm(rand_indexes):
+            thresholds = sorted(set(X[:, feature_index]))
+
+            for threshold in thresholds:
+                mask = X[:, feature_index] <= threshold
+                gini = self.calculate_gini_impurity(y, mask)
+
+                if gini < best_gini:
+                    best_gini = gini
+                    best_feature_index = feature_index
+                    best_threshold = threshold
+
+        return best_feature_index, best_threshold
+
+    def calculate_gini_impurity(self, y, mask):
+        # Calculate Gini impurity for a split
+        size = len(y)
+        if size == 0:
+            return 0
+
+        p_left = len(y[mask]) / size
+        p_right = len(y[~mask]) / size
+
+        gini_left = 1 - sum((np.sum(y[mask] == c) / len(y[mask])) ** 2 for c in set(y[mask]))
+        gini_right = 1 - sum((np.sum(y[~mask] == c) / len(y[~mask])) ** 2 for c in set(y[~mask]))
+
+        gini = p_left * gini_left + p_right * gini_right
+        return gini
+
+    def most_common_label(self, y):
+        # Return the most common label in the node for a NumPy ndarray
+        unique_labels, counts = np.unique(y, return_counts=True)
+        most_common_index = np.argmax(counts)
+        most_common_label = unique_labels[most_common_index]
+        return most_common_label
+
+    def predict_single(self, sample):
+        # Predict the label for a single sample
+        if hasattr(self, 'label'):
+            return self.label
+
+        if sample[self.feature_index] <= self.threshold:
+            return self.left.predict_single(sample)
+        else:
+            return self.right.predict_single(sample)
+
+    def predict(self, X):
+        # Predict labels for multiple samples
+        return [self.predict_single(sample) for sample in X]
                 
 def display_scores(confusion_matrix,true_labels,predictions):
 
@@ -2637,7 +2599,7 @@ def display_scores(confusion_matrix,true_labels,predictions):
                 st.write("F1-Score: "+str(labelwise_metrics[idx]['F1-Score']))
 
 
-def classifier(cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0):
+def classifier(cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0,teleport_prob=0):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -2739,52 +2701,28 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
     elif cltype == "Decision Tree":
 
-        pkl_file_path = str(mod_path)+"/Classifiers/DecisionTree/"
-        min_size = 1
-        search_size = 20
-        output_file = pkl_file_path+str(min_size)+"_"+str(search_size)+".pkl"
+        max_depth = 10
+        min_size = 30
 
-        if os.path.exists(output_file):
+        tree = DecisionTree(max_depth=max_depth,min_size=min_size)
 
-            root = load_pickle_file(output_file)
-
-        else:
-
-            input = []
-
-            for index in range(layer3_features.shape[0]):
-                row = list(layer3_features[index])
-                row.append(np.where(labels[index]==1)[0][0])
-                input.append(row)
-
-            class_values=set([row[-1] for row in input]) #class labels
-            #print("Class Values: "+str(class_values))
-            root = Node(class_values,min_size,search_size,datanode = input)
-            #print(root, len(root.datanode))
-            print("Creating Tree")
-            split(root)
-            save_tree(root,output_file)
-
-        print("Tree Nodes")
-        print_tree(root)
+        even_labels = []
         
-        test_set = []
+        for idx in range(len(labels)):
+            even_labels.append(np.where(labels[idx]==1)[0][0])
 
-        for index in range(odd_layer3_features.shape[0]):
-            test_set.append(list(odd_layer3_features[index]))
+        scaler = StandardScaler()
+        layer3_features_scaled = scaler.fit_transform(layer3_features)
+
+        tree.fit(layer3_features_scaled,np.array(even_labels))
 
         true_labels = []
         
         for idx in range(len(odd_labels)):
             true_labels.append(np.where(odd_labels[idx]==1)[0][0])
 
-        predictions = []
-        
-        print("Classifying")
-        for test in tqdm(test_set):
-            predictions.append(classify(root, test))
-
-        #print(classifications)
+        odd_layer3_features_scaled = scaler.fit_transform(odd_layer3_features)
+        predictions = tree.predict(odd_layer3_features_scaled)
 
         confusion_matrix = np.zeros((101,101))
 
@@ -2835,7 +2773,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         for idx in range(len(labels)):
             even_labels.append(np.where(labels[idx]==1)[0][0])
 
-        ppr = PersonalizedPageRankClassifier(teleport_prob=0.15)
+        ppr = PersonalizedPageRankClassifier(teleport_prob=teleport_prob)
 
         adj_matrix = []
 
