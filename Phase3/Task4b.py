@@ -45,14 +45,34 @@ class LSH:
             distances.append((layer, layer_distances))
         return distances
 
+    def display_buckets(self, layer):
+        if layer <= 0 or layer > self.num_layers:
+            print("Layer index out of range.")
+            return
+
+        print(f"Layer {layer} Buckets:")
+        for key, value in self.hash_tables[layer - 1].items():
+            print(f"Hash Value: {key}")
+            print("Items:")
+            for item in value:
+                print(f"   Index: {item[1]}, Vector: {item[0]}")
+            print("=" * 20)
+
 
 
 import scipy.io
-from google.colab import drive
-drive.mount('/content/drive')
-mat = scipy.io.loadmat('/content/drive/MyDrive/arrays.mat')
+#from google.colab import drive
+#drive.mount('/content/drive')
+#mat = scipy.io.loadmat('/content/drive/MyDrive/arrays.mat')
+#above three for googlecolab
+
+mat = scipy.io.loadmat('arrays.mat')
 
 sel = "avgpool_features"
+
+print(mat[sel])
+print(len(mat[sel]))
+print(len(mat[sel][0]))
 
 # Example usage:
 num_layers = 5
@@ -67,7 +87,10 @@ lsh = LSH(num_layers, num_hashes, input_dim)
 lsh.index_vectors(mat[sel])
 
 # Display the buckets
-#lsh.display_buckets()
+#for i in range(num_layers):
+#  lsh.display_buckets(i)
+
+#lsh.display_buckets(1)
 
 index = int(input("The index of the image you want to search (will be going through only the even) : "))
 
@@ -77,28 +100,42 @@ hashed_buckets = lsh.hash_query_vector(query)
 for layer, hash_value, bucket in hashed_buckets:
     print(f"Layer {layer} - Hash: {hash_value}, Bucket Size: {len(bucket)}")
 
-# Calculate distances from query to items in hashed buckets
-distances = lsh.calculate_distances(query, hashed_buckets)
 
-# After calculating distances
-k = 20  # Set the value of k for top k indices
+unique_indices = set()
 
-# Flatten distances list and sort based on distance
-all_distances = [(layer, index, dist) for layer, layer_distances in distances for index, dist in layer_distances]
-sorted_distances = sorted(all_distances, key=lambda x: x[2])[:k]
+for layer, _, bucket in hashed_buckets:
+    print(f"Layer {layer} - Bucket Size: {len(bucket)}")
+    for item in bucket:
+        unique_indices.add(item[1])  # Collecting unique indices
 
-# Extract indices from sorted distances
-top_k_indices = [(layer, index) for layer, index, _ in sorted_distances]
-print(top_k_indices)
+print("Unique Vector Indices:")
+print(unique_indices)
 
+print(len(unique_indices))
 
-for j in range(k):
-  hello = np.array(top_k_indices[j][1])
-  for i,rod in enumerate(mat[sel]):
-    arrays_equal = np.array_equal(hello, rod)
-    #print(hello)
-    #print(rod)
-    #print(arrays_equal)
-    if arrays_equal == 1:
-      print(i)
+from heapq import nsmallest
+
+k = int(input("Enter the value of k for nearest neighbors: "))
+
+distances = []  # To store calculated distances
+for _, _, bucket in hashed_buckets:
+    for item in bucket:
+        vector = np.array(item[0])  # Retrieve the vector from the bucket
+        distance = np.linalg.norm(query - vector)  # Calculate Euclidean distance
+        distances.append((item[1], distance))  # Store index and distance
+
+# Sort distances and retrieve k indices with smallest distances
+nearest_indices = [index for index, _ in nsmallest(k, distances, key=lambda x: x[1])]
+
+print(f"Indices of {k} Nearest Neighbors:")
+print(nearest_indices)
+
+#To remove duplicates
+distances_unique = set(distances)
+
+# Sort distances and retrieve k indices with smallest distances
+nearest_indis = [indi for indi, _ in nsmallest(k, distances_unique, key=lambda x: x[1])]
+
+print(f"Indices of {k} Nearest Neighbors:")
+print(nearest_indis)
 
