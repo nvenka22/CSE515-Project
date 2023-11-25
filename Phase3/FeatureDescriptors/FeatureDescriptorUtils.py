@@ -39,7 +39,7 @@ from Utilities.DisplayUtils import *
 import streamlit as st
 from pathlib import Path
 from collections import defaultdict
-import copyreg
+import joblib
 
 def load_pickle_file(file_path):
     if os.path.exists(file_path):
@@ -2376,12 +2376,15 @@ class CSRMatrix:
         self.col_indices = col_indices
         self.shape = shape
 
-def pagerank_csr(csr_matrix, teleport_prob=0.15, max_iter=100, tol=1e-6,personalization = None):
+def pagerank_csr(csr_matrix, teleport_prob=0.15, max_iter=1000, tol=1e-6,personalization = None):
     n = csr_matrix.shape[0]
     num_nonzero = len(csr_matrix.values)
 
     # Initialize PageRank scores
-    pagerank = np.ones(n) / n
+    if personalization is not None:
+        pagerank = personalization/np.sum(personalization)
+    else:
+        pagerank = np.ones(n) / n
 
     for _ in tqdm(range(max_iter)):
         pagerank_new = np.zeros(n)
@@ -2397,19 +2400,46 @@ def pagerank_csr(csr_matrix, teleport_prob=0.15, max_iter=100, tol=1e-6,personal
         # Apply teleportation
         pagerank_new = teleport_prob / n + (1 - teleport_prob) * pagerank_new
 
-        if personalization is not None:
-            pagerank_new+=personalization
-
         # Check for convergence
         if np.linalg.norm(pagerank_new - pagerank, 1) < tol:
             break
 
         pagerank = pagerank_new
-    print()
+    #print(pagerank)
+    return pagerank
+
+def pagerank(adj_matrix, labels, personalization, teleport_prob=0.15, max_iter=100):
+
+    #Initialize pagerank vector
+    pagerank = (1-teleport_prob)*np.dot(adj_matrix,personalization) + teleport_prob*(np.ones(adj_matrix.shape[0])/adj_matrix.shape[0])
+    pagerank/=np.sum(pagerank)
+
+    for _ in tqdm(range(max_iter)):
+
+        label_totals = {}
+
+        for index in range(adj_matrix.shape[0]):
+            if labels[index] in label_totals.keys():
+                label_totals[labels[index]]+=1
+            else:
+               label_totals[labels[index]]=1 
+
+        reseed = []
+
+        for index in range(adj_matrix.shape[0]):
+            reseed.append(pagerank[index]/label_totals[labels[index]])
+
+        reseed = np.array(reseed)
+        reseed/=np.sum(reseed)
+
+        #calculate PPR-G score
+        pagerank = (1-teleport_prob)*np.dot(adj_matrix,pagerank) + teleport_prob * reseed
+        pagerank/=np.sum(pagerank)
+
     return pagerank
 
 class PersonalizedPageRankClassifier:
-    def __init__(self, teleport_prob=0.15, max_iter=100, tol=1e-6):
+    def __init__(self, teleport_prob=0.15, max_iter=100, tol=1e-5):
         self.teleport_prob = teleport_prob
         self.max_iter = max_iter
         self.tol = tol
@@ -2419,40 +2449,34 @@ class PersonalizedPageRankClassifier:
         self.classes_ = np.unique(y_train)
         self.personalization = personalization
 
-        values = [val for row in X_train for val in row if val != 0]
+        """values = [val for row in X_train for val in row if val != 0]
         row_ptr = [0] + np.cumsum(np.sum(X_train != 0, axis=1)).tolist()
         col_indices = [col_idx for row in X_train for col_idx in np.where(row != 0)[0]]
         shape = X_train.shape
-        csr_matrix = CSRMatrix(values, row_ptr, col_indices, shape)
+        csr_matrix = CSRMatrix(values, row_ptr, col_indices, shape)"""
 
         # Compute personalized PageRank for the entire training set
-        pagerank_vector = pagerank_csr(csr_matrix, teleport_prob=self.teleport_prob,
-                                    max_iter=self.max_iter, tol=self.tol, personalization=personalization)
+        pagerank_vector = pagerank(X_train, y_train, personalization, teleport_prob=self.teleport_prob, max_iter=self.max_iter)
         
-        total_score = sum(pagerank_vector)
-        normalized_scores = [score / total_score for score in pagerank_vector]
-
-        if personalization is not None:
-            normalized_scores+=personalization
-            total_score = sum(normalized_scores)
-            normalized_scores = [score / total_score for score in normalized_scores]
+        #pagerank_vector = pagerank_vector/np.sum(pagerank_vector)
         
         # Store the computed pagerank_vector
-        self.pagerank_vector = normalized_scores
+        self.pagerank_vector = pagerank_vector
 
         with st.expander("PageRank Values for Training Data"):
-            st.write(self.pagerank_vector)
+            st.write(list(self.pagerank_vector))
+        with st.expander("Pagerank Values Analysis"):
+            st.write("Min Value: "+str(np.min(self.pagerank_vector)))
+            st.write("Max Value: "+str(np.max(self.pagerank_vector)))
+            st.write("Mean Value: "+str(np.mean(self.pagerank_vector)))
 
     def predict(self, X_test, train_labels):
         predictions = []
 
-        for sample in X_test:
-            
-            sample_pagerank = sample * self.pagerank_vector
-
-            #print(sample_pagerank.shape)
-
-            predictions.append(train_labels[np.argmax(sample_pagerank)])
+        for idx in range(X_test.shape[0]):
+            pred_pagerank = (1-self.teleport_prob)*X_test[idx]*self.pagerank_vector + self.teleport_prob*X_test[idx]
+            pred_pagerank/=np.sum(pred_pagerank)
+            predictions.append(train_labels[np.argmax(pred_pagerank)])
 
         return predictions
     
@@ -2461,7 +2485,7 @@ class DecisionTree:
         self.max_depth = max_depth
         self.min_size = min_size
 
-    def fit(self, X, y, depth=0):
+    def fit(self, X, y, search_size = 10,depth=0):
         # Store training data and labels in the node
         self.X = X
         self.y = y
@@ -2474,7 +2498,7 @@ class DecisionTree:
             return
 
         # Find the best split
-        feature_index, threshold = self.find_best_split(X, y)
+        feature_index, threshold = self.find_best_split(X, y,search_size)
 
         # If no split is found, make it a leaf node
         if feature_index is None:
@@ -2484,10 +2508,10 @@ class DecisionTree:
         # Split the data and recursively build the tree
         mask = X[:, feature_index] <= threshold
         self.left = DecisionTree(self.max_depth, self.min_size)
-        self.left.fit(X[mask], y[mask], depth + 1)
+        self.left.fit(X[mask], y[mask], search_size=search_size,depth = depth + 1)
 
         self.right = DecisionTree(self.max_depth, self.min_size)
-        self.right.fit(X[~mask], y[~mask], depth + 1)
+        self.right.fit(X[~mask], y[~mask], search_size=search_size,depth = depth + 1)
 
         self.feature_index = feature_index
         self.threshold = threshold
@@ -2496,16 +2520,12 @@ class DecisionTree:
         # Check if the node should be a leaf based on hyperparameters
         return (self.max_depth is not None and depth == self.max_depth) or len(set(y)) == 1 or len(y) <= self.min_size
 
-    def find_best_split(self, X, y):
+    def find_best_split(self, X, y,search_size):
         # Find the best split based on Gini impurity
         best_gini = float('inf')
         best_feature_index = None
         best_threshold = None
 
-        if X.shape[1]>100:
-            search_size = 100
-        else:
-            search_size = X.shape[1]
         rand_indexes = np.random.choice(range(X.shape[1]),size = search_size, replace=False)
 
         for feature_index in tqdm(rand_indexes):
@@ -2557,6 +2577,14 @@ class DecisionTree:
     def predict(self, X):
         # Predict labels for multiple samples
         return [self.predict_single(sample) for sample in X]
+    
+    def save_model(self, filename):
+        # Save the decision tree model to a file using joblib
+        joblib.dump(self, filename)
+
+def load_model(filename):
+    # Load a saved decision tree model from a file using joblib
+    return joblib.load(filename)
                 
 def display_scores(confusion_matrix,true_labels,predictions):
 
@@ -2702,7 +2730,8 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
     elif cltype == "Decision Tree":
 
         max_depth = 10
-        min_size = 30
+        min_size = 25
+        search_size = 25
 
         tree = DecisionTree(max_depth=max_depth,min_size=min_size)
 
@@ -2713,8 +2742,14 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
         scaler = StandardScaler()
         layer3_features_scaled = scaler.fit_transform(layer3_features)
+        treepath = mod_path.joinpath("Classifiers","DecisionTree",str(max_depth)+"_"+str(min_size)+"_"+str(search_size)+".joblib")
 
-        tree.fit(layer3_features_scaled,np.array(even_labels))
+        if os.path.exists(treepath):
+            tree = load_model(treepath)
+
+        else:
+            tree.fit(layer3_features_scaled,np.array(even_labels),search_size)
+            tree.save_model(treepath)
 
         true_labels = []
         
@@ -2773,25 +2808,37 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         for idx in range(len(labels)):
             even_labels.append(np.where(labels[idx]==1)[0][0])
 
+        print("Using Teleport Prob"+str(teleport_prob))
         ppr = PersonalizedPageRankClassifier(teleport_prob=teleport_prob)
 
         adj_matrix = []
 
         personalization = []
+        label_totals = {}
 
         print("Building Adjacency Matrix")
         for idx in tqdm(range(0,8677,2)):
 
             scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
 
+            label = even_labels[int(idx/2)]
             even_scores = {}
-            total_score = 0
+            label_total = 0
+            label_count = 0
+            
             for imgid in scores.keys():
                 if int(imgid)%2 == 0:
                     even_scores[int(imgid)] = scores[imgid]
-                    total_score+=scores[imgid]
+                    if even_labels[int(int(imgid)/2)] == label:
+                        label_total += scores[imgid]
+                        label_count += 1
 
-            personalization.append(total_score/4339)
+            personalization.append(label_total/label_count)
+
+            if label in label_totals.keys():
+                label_totals[label]+=label_total/label_count
+            else:
+                label_totals[label]=label_total/label_count
 
             #print("Scores present for "+str(len(scores.keys()))+" images")
 
@@ -2806,11 +2853,14 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
             adj_matrix.append(row)
 
+        for idx in range(len(personalization)):
+            personalization[idx]/=label_totals[even_labels[idx]]
+
         adj_matrix = np.array(adj_matrix)
         even_labels = np.array(even_labels)
         print("Adjacency Matrix: "+str(adj_matrix.shape)+" Labels: "+str(even_labels.shape))
 
-        ppr.fit(adj_matrix,even_labels,personalization=np.array(personalization))
+        ppr.fit(adj_matrix,even_labels,personalization=personalization)
 
         odd_adj_matrix = []
 
@@ -2827,7 +2877,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
             #print("Scores present for "+str(len(scores.keys()))+" images")
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
+            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
 
             top_k_even_indices = list(even_scores.keys())
 
