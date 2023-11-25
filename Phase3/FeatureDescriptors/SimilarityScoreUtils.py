@@ -218,7 +218,7 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     #Segregate images of the label in particular, and calculate similarity scores
     for doc in image_data_by_label:
         required_indices_for_label.append(doc['_id'])
-        #similarity_calculator(doc['_id'], odd_feature_collection, feature_collection, similarity_collection, dataset)
+        similarity_calculator(doc['_id'], odd_feature_collection, feature_collection, similarity_collection, dataset)
         
         
     #print('The required indices for this label are')
@@ -281,11 +281,8 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
         
     #Call display method for final output
     
-    #display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
-
+    display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
     print("Exit similarity_calculator_by_label")
-
-    return display_indices
            
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
