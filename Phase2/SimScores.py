@@ -1,3 +1,9 @@
+import multiprocessing as mp
+try:
+   mp.set_start_method('spawn', force=True)
+   print("spawned")
+except RuntimeError:
+   pass
 from numba import njit 
 import os
 import cv2
@@ -22,9 +28,6 @@ import pickle
 import json
 from MongoDB.MongoDBUtils import *
 from multiprocessing import Process
-from multiprocessing import set_start_method
-set_start_method("fork")
-
   
 #@njit(nopython = False) 
 def featurenormalize(feature_vector):
@@ -152,7 +155,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
 def call_similarity_calculator(startindex,endindex,odd_feature_collection,feature_collection,similarity_collection,dataset):
 
     counter = 0
-    for idx in range(endindex,startindex,-2):
+    for idx in range(startindex,endindex,2):
         sim_score, fromdb = similarity_calculator(idx,odd_feature_collection,feature_collection,similarity_collection,caltech101)
         if fromdb == True:
             counter+=1
@@ -164,17 +167,12 @@ if __name__=="__main__":
 
     final_similarity_scores = {}
 
-    dbName = "CSE515-MWD-Vaishnavi-ProjectPhase2"
+    dbName = "CSE515-MWD-ProjectPhase2-Final"
     odd_feature_collection = connect_to_db(dbName,'image_features_odd')
     feature_collection = connect_to_db(dbName,'image_features')
     similarity_collection = connect_to_db(dbName,'image_similarities')
 
-    transferclient = MongoClient('192.168.0.5',27017)
-    transferdb = transferclient["CSE515-MWD-Nikhil_V_Ramanan-ProjectPhase2"]
-    transfercollection = transferdb['image_similarities']
-
-
-    processes = [Process(target = call_similarity_calculator,args = (idx,idx+500,odd_feature_collection,feature_collection,transfercollection,caltech101)) for idx in range(0,8677,500)]
+    processes = [Process(target = call_similarity_calculator,args = (idx,idx+500,odd_feature_collection,feature_collection,similarity_collection,caltech101)) for idx in range(1,8677,500)]
 
     print("Threads Running")
     for p in processes:
