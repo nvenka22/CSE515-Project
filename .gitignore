@@ -14,6 +14,15 @@ Phase3/LatentSemantics/arrays_odd.mat
 
 Phase3/Classifiers
 
+*.pkl
+
+*.json
+
+*.db
+
+*.zip
+
+
 .vscode/*    
 !.vscode/settings.json
 !.vscode/tasks.json
