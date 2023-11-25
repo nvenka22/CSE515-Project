@@ -178,7 +178,8 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
             "hog_descriptor": {},
             "avgpool_descriptor": {},
             "layer3_descriptor": {},
-            "fc_descriptor": {}
+            "fc_descriptor": {},
+            "fc_softmax_descriptor": {}
         }
     
     for cmpidx in tqdm(range(0,len(dataset),2)):
@@ -190,7 +191,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
         avgpool_similarity = similarity_score_avgpool(imagedata1["avgpool_descriptor"], imagedata2["avgpool_descriptor"])
         layer3_similarity = similarity_score_layer3(imagedata1["layer3_descriptor"], imagedata2["layer3_descriptor"]) 
         fc_similarity = similarity_score_fc(imagedata1["fc_descriptor"], imagedata2["fc_descriptor"])
-        #fc_sofmax_similarity = get_similarity_score_resnet(imagedata1["fc_softmax_descriptor"], imagedata2["fc_softmax_descriptor"])
+        fc_sofmax_similarity = get_similarity_score_resnet(imagedata1["fc_softmax_descriptor"], imagedata2["fc_softmax_descriptor"])
 
         if not np.isnan(color_moments_similarity):
             similarities["color_moments"][str(cmpidx)] = color_moments_similarity
@@ -200,7 +201,7 @@ def similarity_calculator(index,odd_feature_collection,feature_collection,simila
         similarities["avgpool_descriptor"][str(cmpidx)] =  avgpool_similarity
         similarities["layer3_descriptor"][str(cmpidx)] = layer3_similarity
         similarities["fc_descriptor"][str(cmpidx)] =  fc_similarity
-        #similarities["fc_softmax_descriptor"][str(cmpidx)] =  fc_sofmax_similarity
+        similarities["fc_softmax_descriptor"][str(cmpidx)] =  fc_sofmax_similarity
     
     similarity_collection.update_one({'_id':index},{'$set':similarities},upsert = True)
     

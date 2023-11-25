@@ -734,9 +734,9 @@ def ls1(feature_model,k,dimred,feature_collection):
 
 
 ################## Task 5 Methods
-def get_index_for_label(label, dataset):
+def get_index_for_label(label, dataset,baseIndex):
     index = []
-    for i in range(0, len(dataset.y), 2):
+    for i in range(baseIndex, len(dataset.y), 2):
         if dataset.y[i] == label:
             index.append(i)
     
@@ -755,7 +755,7 @@ def get_sim_for_labels(labelx, labely, feature_model, odd_feature_collection, fe
     
     return np.mean(scores)
 
-def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset):
+def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset,baseIndex):
     labels = [label for label in range(101)]
     
     label_sim_matrix = np.nan * np.zeros((101,101))
@@ -765,13 +765,13 @@ def get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_
         label_sim_matrix[idx][idx] = 1
 
     for labelx in tqdm(labels):
-        labelx_idx = get_index_for_label(labelx, dataset)
+        labelx_idx = get_index_for_label(labelx, dataset,baseIndex)
 
         for labely in labels:
             if labelx == labely: continue
             if np.isnan(label_sim_matrix[labelx][labely]):
 
-                labely_idx = get_index_for_label(labely, dataset)
+                labely_idx = get_index_for_label(labely, dataset,baseIndex)
                 score = get_sim_for_labels(labelx_idx, labely_idx, feature_model, odd_feature_collection, feature_collection, similarity_collection, dataset)
                 label_sim_matrix[labelx][labely] = label_sim_matrix[labely][labelx] = score
 
@@ -800,43 +800,47 @@ def list_label_weight_pairs(top_k_indices, latent_semantics):
             rank+=1
 
 
-def ls3(feature_model, dimred, k, odd_feature_collection, feature_collection, similarity_collection, caltech101):
+def ls3(feature_model, dimred, k, odd_feature_collection, feature_collection, similarity_collection, caltech101, imageType='odd',saveLatentSemantic = 'False'):
 
     mod_path = Path(__file__).parent.parent
     output_file = str(mod_path)+"/LatentSemantics/"
 
     ### Creating Label-Label Sim Matx -1
-    sim_matrix = get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, caltech101) ##Labels should be in increasing order
+    baseIndex = 1 if imageType == 'odd' else 0
+    sim_matrix = get_labels_similarity_matrix(feature_model, odd_feature_collection, feature_collection, similarity_collection, caltech101,baseIndex) ##Labels should be in increasing order
     ### Dim reduction on Sim matx -2
     latent_semantics, top_k_indices = get_reduced_dim_labels(sim_matrix, dimred, k) 
 
-    ### Storing latent Semantics - 3
-    if feature_model == "Color Moments":
+    if saveLatentSemantic == 'True':
+        ### Storing latent Semantics - 3
+        if feature_model == "Color Moments":
 
-        output_file += "latent_semantics_3_color_moments_"+str(dimred)+"_"+str(k)+"_output.pkl"
+            output_file += "latent_semantics_3_color_moments_"+str(dimred)+"_"+str(k)+"_output.pkl"
 
-    elif feature_model == "Histograms of Oriented Gradients(HOG)":
+        elif feature_model == "Histograms of Oriented Gradients(HOG)":
 
-        output_file += "latent_semantics_3_hog_"+str(dimred)+"_"+str(k)+"_output.pkl"
+            output_file += "latent_semantics_3_hog_"+str(dimred)+"_"+str(k)+"_output.pkl"
 
-    elif feature_model == "ResNet-AvgPool-1024":
+        elif feature_model == "ResNet-AvgPool-1024":
 
-        output_file += "latent_semantics_3_avgpool_"+str(dimred)+"_"+str(k)+"_output.pkl"
+            output_file += "latent_semantics_3_avgpool_"+str(dimred)+"_"+str(k)+"_output.pkl"
 
-    elif feature_model == "ResNet-Layer3-1024":
+        elif feature_model == "ResNet-Layer3-1024":
 
-        output_file += "latent_semantics_3_layer3_"+str(dimred)+"_"+str(k)+"_output.pkl"
-    elif feature_model == "ResNet-FC-1000":
+            output_file += "latent_semantics_3_layer3_"+str(dimred)+"_"+str(k)+"_output.pkl"
+        elif feature_model == "ResNet-FC-1000":
 
-        output_file += "latent_semantics_3_fc_"+str(dimred)+"_"+str(k)+"_output.pkl"
+            output_file += "latent_semantics_3_fc_"+str(dimred)+"_"+str(k)+"_output.pkl"
 
-    elif feature_model == "RESNET":
+        elif feature_model == "RESNET":
 
-        output_file += "latent_semantics_3_resnet_"+str(dimred)+"_"+str(k)+"_output.pkl"
+            output_file += "latent_semantics_3_resnet_"+str(dimred)+"_"+str(k)+"_output.pkl"
 
-    pickle.dump((top_k_indices,latent_semantics), open(output_file, 'wb+'))
-    ### Listing Label Weight Pairs - 4
-    list_label_weight_pairs(top_k_indices, latent_semantics)
+        pickle.dump((top_k_indices,latent_semantics), open(output_file, 'wb+'))
+        ### Listing Label Weight Pairs - 4
+        list_label_weight_pairs(top_k_indices, latent_semantics)
+
+    return latent_semantics , top_k_indices
 
 #################################
 def get_class_name(label):
@@ -1041,7 +1045,15 @@ def store_by_feature_odd(output_file,feature_collection):
 
         fc_features.append(fcarray)
 
-    scipy.io.savemat(output_file+'arrays_odd.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features})  
+        fetchedarray = doc['fc_softmax_descriptor']
+
+        resnetarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        resnetarray = np.array(resnetarray)
+
+        resnet_features.append(resnetarray)
+
+    scipy.io.savemat(output_file+'arrays_odd.mat', {'labels': labels, 'cm_features': cm_features, 'hog_features':hog_features, 'avgpool_features': avgpool_features,'layer3_features':layer3_features, 'fc_features': fc_features,'resnet_features' : resnet_features})  
 
 def ls2(feature_model,k,feature_collection):
 
@@ -2909,7 +2921,180 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             st.write(confusion_matrix)
 
         display_scores(confusion_matrix,true_labels,predictions)
+
+
+####################################################### Task 1 Methods ##############################################################################
+    
+    
+def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_latent_semantics):
+    print('Enter calculate_label_from_semantic blbbl')
+    output_labels=[]
+    
+   # Compute Distances for every row from the odd image latent semantics with every row (label) from the label weighted semantics (even images)
+    for idx in tqdm(range(0,odd_latent_semantics.shape[0])):
+        sim_scores=[]
+        for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
+            #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+            sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+
+            #print(min(sim_scores),max(sim_scores))
+        output_labels.append(np.argmin(sim_scores))
         
+    # even_label_weighted_latent_semantics_transpose = np.array(even_label_weighted_latent_semantics).T
+
+    # image_label_latent_semantic = np.dot(odd_latent_semantics,even_label_weighted_latent_semantics_transpose)
+    # print('Dot product complete')
+    # print(image_label_latent_semantic.shape)
+    # print(image_label_latent_semantic)
+    # for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
+    #     output_labels.append(np.argmin(image_label_latent_semantic[idx]))
+        
+
+    print(output_labels)
+    print('Exit calculate_label_from_semantic')
+    return output_labels
+
+
+def generate_label_weighted_semantics(image_data,feature_space,k,feature_collection, odd_feature_collection, similarity_collection):
+
+    representation_image_index_by_label = []
+
+    required_resnet_features = []
+
+    
+    for label in tqdm(range(0,101)):
+        representation_image_index_by_label.append(similarity_calculator_by_label(label,feature_space,1,odd_feature_collection,feature_collection,similarity_collection,Caltech101)[0])
+
+    
+    for idx in representation_image_index_by_label:
+        required_resnet_features.append(image_data['resnet_features'][int(idx/2)])
+    
+    #print(required_resnet_features.shape)
+
+    label_weighted_latent_semantics = kmeans_decomposition(np.array(required_resnet_features),k)
+    
+    return label_weighted_latent_semantics
+
+        
+
+
+
+def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection):
+    mod_path = Path(__file__).parent.parent
+    ls_file_path = str(mod_path)+"/LatentSemantics/"
+    k=100
+    try:
+        data_even = scipy.io.loadmat(ls_file_path+'arrays.mat')
+        data_odd  = scipy.io.loadmat(ls_file_path+'arrays_odd.mat')
+
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+e)
+        store_by_feature(str(ls_file_path),feature_collection)
+        store_by_feature_odd(str(ls_file_path),odd_feature_collection)
+        data_even = scipy.io.loadmat(ls_file_path+'arrays.mat')
+        data_odd  = scipy.io.loadmat(ls_file_path+'arrays_odd.mat')
+        
+        #labels_even = data_even['labels']
+        #labels_odd = data_odd['labels']
+
+   
+
+    #Latent Semantic chosen is ResNet as Feature Model, K-Means as Dimensionality Reduction Technique and 'k' value as 5 for the even images in the dataset. 
+    try:
+        pkl_file_path = ls_file_path+"Phase3_Even_Latent_Semantics_100.pkl"  #Change this file path after new pickle file has been created. 
+        with open(pkl_file_path,'rb') as file:
+            print('File path is '+pkl_file_path)
+            even_label_weighted_latent_semantics = pickle.load(file)
+            print('Even LS Pickle File Loaded')
+            
+    
+    except (FileNotFoundError) as e:
+        even_label_weighted_latent_semantics = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
+        pickle.dump(even_label_weighted_latent_semantics, open(pkl_file_path, 'wb+'))
+        print('Pickle File Created : '+pkl_file_path)
+    
+    print(even_label_weighted_latent_semantics.shape)
+    
+
+    #Calculate Latent Semantics for Odd Images
+    try:
+        odd_ls_file_path = ls_file_path+"odd_latent_semantics_100.pkl"
+        with open(odd_ls_file_path,'rb') as file:
+            print('File path is '+odd_ls_file_path)
+            odd_latent_semantics = pickle.load(file)
+            print('Odd Latent Semantic Pickle File Loaded')
+            print(odd_latent_semantics.shape)
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print('Calculating Latent Semantics for Odd Images')
+        odd_resnet_features = data_odd['resnet_features']
+        print(odd_resnet_features.shape)
+        odd_latent_semantics = kmeans_decomposition(odd_resnet_features,k)
+        print('Odd Latent Semantics Calculated')
+        print(odd_latent_semantics.shape)
+        pickle.dump(odd_latent_semantics, open(odd_ls_file_path, 'wb+'))
+        print('Pickle File Created : '+odd_ls_file_path)
+
+    
+    true_labels = []
+    odd_labels = data_odd['labels']
+        
+    for idx in range(len(odd_labels)):
+        true_labels.append(np.where(odd_labels[idx]==1)[0][0])
+
+    predictions = calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_latent_semantics)
+
+    print('Predictions length is '+str(len(predictions)))
+
+    confusion_matrix = np.zeros((101,101))
+    
+
+    for idx in range(len(predictions)):
+        c = int(predictions[idx])
+        l = int(true_labels[idx])
+        confusion_matrix[l][c]+=1
+
+    labelwise_metrics = {}
+    for idx in range(101):
+        tp = confusion_matrix[idx][idx]
+        fn = sum(confusion_matrix[idx]) - confusion_matrix[idx][idx]
+        tn = 0
+        fp = 0
+        for r in range(101):
+            for c in range(101):
+                if r!= idx and c!=idx:
+                    tn+=1
+                if c == idx and r!=idx:
+                    fp+=1
+        precision = tp / (tp+fp)
+        recall = tp / (tp+fn)
+        f1_score = (2*precision*recall) / (precision+recall)
+        labelwise_metrics[idx] = {"Precision":precision,"Recall":recall,"F1-Score":f1_score}
+
+    truecount = 0
+
+    for idx in range(len(predictions)):
+        if predictions[idx] == true_labels[idx]:
+            truecount+=1
+
+    accuracy = truecount/len(predictions)
+
+    st.write("Accuracy Scores:")
+    st.write("Overall Accuracy: "+str(accuracy))
+    st.write(confusion_matrix)
+
+    with st.container():
+        for idx in range(101):
+            with st.expander("Label "+str(idx)):
+                st.write("Precision: "+str(labelwise_metrics[idx]["Precision"]))
+                st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
+                st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
+    
+    
+    
+    
+
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
 dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]

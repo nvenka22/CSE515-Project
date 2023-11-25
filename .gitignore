@@ -14,6 +14,14 @@ Phase3/LatentSemantics/arrays_odd.mat
 
 Phase3/Classifiers
 
+*.json
+
+*.zip
+
+*.db
+
+*.pkl
+
 .vscode/*    
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -24,3 +32,4 @@ Phase3/Classifiers
 MongoTransfer.py
 MongoCounter.py
 .vscode/launch.json
+
