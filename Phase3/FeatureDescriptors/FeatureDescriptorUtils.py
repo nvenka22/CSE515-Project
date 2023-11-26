@@ -38,7 +38,7 @@ from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
 from pathlib import Path
-from collections import defaultdict
+from heapq import nsmallest
 import joblib
 
 def load_pickle_file(file_path):
@@ -572,7 +572,7 @@ def kmeans_decomposition(X, k, max_iterations=100):
     # Compute distances to centroids as the decomposition
     distances = np.linalg.norm(X[:, np.newaxis] - centroids, axis=2)
 
-    return distances
+    return distances, centroids
 
 def reduce_dimensionality(feature_model, k, technique):
     if technique == 'SVD':
@@ -2672,7 +2672,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         odd_labels = odd_data['labels']
         odd_layer3_features = odd_data['layer3_features']
         
-    if cltype == "k-Means":
+    """if cltype == "k-Means":
 
         kmeans = KMeans(similarity_collection,n_clusters=k)
         class_centers, classification = kmeans.fit(layer3_features)
@@ -2737,13 +2737,13 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         with st.expander("Confusion Matrix for Classification"):
             st.write(confusion_matrix)
 
-        display_scores(confusion_matrix,true_labels,predictions)
+        display_scores(confusion_matrix,true_labels,predictions)"""
 
-    elif cltype == "Decision Tree":
+    if cltype == "Decision Tree":
 
-        max_depth = 10
-        min_size = 25
-        search_size = 25
+        max_depth = 25
+        min_size = 2
+        search_size = 50
 
         tree = DecisionTree(max_depth=max_depth,min_size=min_size)
 
@@ -2927,7 +2927,7 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
     
     
 def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_latent_semantics):
-    print('Enter calculate_label_from_semantic blbbl')
+    print('Enter calculate_label_from_semantic-Euclidean')
     output_labels=[]
     
    # Compute Distances for every row from the odd image latent semantics with every row (label) from the label weighted semantics (even images)
@@ -2935,7 +2935,7 @@ def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_laten
         sim_scores=[]
         for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
             #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
-            sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+            sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
 
             #print(min(sim_scores),max(sim_scores))
         output_labels.append(np.argmin(sim_scores))
@@ -2963,7 +2963,7 @@ def generate_label_weighted_semantics(image_data,feature_space,k,feature_collect
 
     
     for label in tqdm(range(0,101)):
-        representation_image_index_by_label.append(similarity_calculator_by_label(label,feature_space,1,odd_feature_collection,feature_collection,similarity_collection,Caltech101)[0])
+        representation_image_index_by_label.append(similarity_calculator_by_label(label,feature_space,1,odd_feature_collection,feature_collection,similarity_collection,Caltech101))
 
     
     for idx in representation_image_index_by_label:
@@ -2971,13 +2971,9 @@ def generate_label_weighted_semantics(image_data,feature_space,k,feature_collect
     
     #print(required_resnet_features.shape)
 
-    label_weighted_latent_semantics = kmeans_decomposition(np.array(required_resnet_features),k)
+    label_weighted_latent_semantics, centroids = kmeans_decomposition(np.array(required_resnet_features),k)
     
-    return label_weighted_latent_semantics
-
-        
-
-
+    return label_weighted_latent_semantics, centroids
 
 def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection):
     mod_path = Path(__file__).parent.parent
@@ -2989,7 +2985,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
         print('Descriptor Mat Files Loaded Successfully')
     except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
-        print("Exception in ls_even_by_label "+e)
+        print("Exception in ls_even_by_label "+str(e))
         store_by_feature(str(ls_file_path),feature_collection)
         store_by_feature_odd(str(ls_file_path),odd_feature_collection)
         data_even = scipy.io.loadmat(ls_file_path+'arrays.mat')
@@ -3002,16 +2998,16 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
     #Latent Semantic chosen is ResNet as Feature Model, K-Means as Dimensionality Reduction Technique and 'k' value as 5 for the even images in the dataset. 
     try:
-        pkl_file_path = ls_file_path+"Phase3_Even_Latent_Semantics_100.pkl"  #Change this file path after new pickle file has been created. 
+        pkl_file_path = ls_file_path+"Phase3_Even_Latent_Semantics_"+str(k)+".pkl"  #Change this file path after new pickle file has been created. 
         with open(pkl_file_path,'rb') as file:
             print('File path is '+pkl_file_path)
-            even_label_weighted_latent_semantics = pickle.load(file)
+            even_label_weighted_latent_semantics, centroids = pickle.load(file)
             print('Even LS Pickle File Loaded')
             
     
     except (FileNotFoundError) as e:
-        even_label_weighted_latent_semantics = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
-        pickle.dump(even_label_weighted_latent_semantics, open(pkl_file_path, 'wb+'))
+        even_label_weighted_latent_semantics, centroids = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
+        pickle.dump((even_label_weighted_latent_semantics,centroids), open(pkl_file_path, 'wb+'))
         print('Pickle File Created : '+pkl_file_path)
     
     print(even_label_weighted_latent_semantics.shape)
@@ -3019,7 +3015,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
     #Calculate Latent Semantics for Odd Images
     try:
-        odd_ls_file_path = ls_file_path+"odd_latent_semantics_100.pkl"
+        odd_ls_file_path = ls_file_path+"odd_latent_semantics_"+str(k)+".pkl"
         with open(odd_ls_file_path,'rb') as file:
             print('File path is '+odd_ls_file_path)
             odd_latent_semantics = pickle.load(file)
@@ -3030,7 +3026,18 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         print('Calculating Latent Semantics for Odd Images')
         odd_resnet_features = data_odd['resnet_features']
         print(odd_resnet_features.shape)
-        odd_latent_semantics = kmeans_decomposition(odd_resnet_features,k)
+        
+        odd_latent_semantics = []
+        print("Calculating odd LS")
+        for idx in tqdm(range(odd_resnet_features.shape[0])):
+            feature = odd_resnet_features[idx]
+            semantic = []
+            for centroid in centroids:
+                semantic.append(euclidean_distance_calculator(feature,centroid))
+            odd_latent_semantics.append(semantic)
+
+        odd_latent_semantics = np.array(odd_latent_semantics)
+
         print('Odd Latent Semantics Calculated')
         print(odd_latent_semantics.shape)
         pickle.dump(odd_latent_semantics, open(odd_ls_file_path, 'wb+'))
@@ -3092,7 +3099,154 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
                 st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
     
     
-    
+class LSH:
+    def __init__(self, num_layers, num_hashes, input_dim):
+        self.num_layers = num_layers
+        self.num_hashes = num_hashes
+        self.input_dim = input_dim
+        self.hash_tables = [{} for _ in range(num_layers)]
+        self.random_planes = [np.random.randn(num_hashes, input_dim) for _ in range(num_layers)]
+
+    def hash_vector(self, vector, planes):
+        return ''.join(['1' if np.dot(vector, plane) > 0 else '0' for plane in planes])
+
+    def index_vector(self, vector, index):
+        for i in range(self.num_layers):
+            hash_value = self.hash_vector(vector, self.random_planes[i])
+            hash_key = tuple(vector)  # Convert NumPy array to tuple
+            if hash_value not in self.hash_tables[i]:
+                self.hash_tables[i][hash_value] = []
+            self.hash_tables[i][hash_value].append((hash_key, index))
+
+    def index_vectors(self, vectors):
+        for i, vector in enumerate(vectors):
+            self.index_vector(vector, i)
+
+    def hash_query_vector(self, query_vector):
+        hashed_buckets = []
+        for i in range(self.num_layers):
+            hash_value = self.hash_vector(query_vector, self.random_planes[i])
+            if hash_value in self.hash_tables[i]:
+                bucket = self.hash_tables[i][hash_value]
+                hashed_buckets.append((i+1, hash_value, bucket))
+            else:
+                hashed_buckets.append((i+1, hash_value, []))
+        return hashed_buckets
+
+    def calculate_distances(self, query_vector, hashed_buckets):
+        distances = []
+        for layer, _, bucket in hashed_buckets:
+            layer_distances = []
+            for item in bucket:
+                vector = np.array(item[1])  # Retrieve the vector from the bucket
+                distance = np.linalg.norm(query_vector - vector)  # Calculate Euclidean distance
+                layer_distances.append((item[0], distance))  # Store index and distance
+            distances.append((layer, layer_distances))
+        return distances
+
+    def display_buckets(self, layer):
+        with st.expander("Layer "+str(layer)+" Buckets:"):
+            if layer <= 0 or layer > self.num_layers:
+                st.write("Layer index out of range.")
+                return
+
+            for key, value in sorted(self.hash_tables[layer - 1].items()):
+                st.write("Hash Value: "+str(key)+" Items: "+str(len(value)))
+                #for item in value:
+                #    st.write("Index: "+str(item[1])+", Vector: Shape:"+str(len(item[0]))+ " Min:"+str(np.min(item[0]))+" Max: "+str(np.max(item[0])))
+
+def lsh_calc(feature_collection,num_layers, num_hashes):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    try:
+        data_even = scipy.io.loadmat(even_desc_path)
+        
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+str(e))
+        store_by_feature(str(mat_file_path),feature_collection)
+        data_even = scipy.io.loadmat(even_desc_path)
+
+    feature_desc_array = data_even['avgpool_features']
+    labels = data_even['labels']
+    even_labels = []
+    image_ids = list(range(0,8677,2))
+            
+    for idx in range(len(labels)):
+        even_labels.append(np.where(labels[idx]==1)[0][0])  
+
+    lsh = LSH(num_layers, num_hashes, feature_desc_array.shape[1])
+    lsh.index_vectors(feature_desc_array)
+
+    return lsh
+
+def lsh_search(feature_collection,odd_feature_collection,num_layers, num_hashes,query_image,t):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    try:
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+        
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+str(e))
+        store_by_feature(str(mat_file_path),feature_collection)
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+
+    lsh = lsh_calc(feature_collection,num_layers, num_hashes)
+
+    if query_image%2==0:
+        query = data_even['avgpool_features'][query_image//2]
+    else:
+        query = data_odd['avgpool_features'][query_image//2]
+
+    hashed_buckets = lsh.hash_query_vector(query)
+
+    unique_indices = set()
+
+    for layer, _, bucket in hashed_buckets:
+        for item in bucket:
+            unique_indices.add(item[1])  # Collecting unique indices
+
+    with st.expander("Unique Vector Indices:"):
+        st.write("Number of Unique Indices considered:"+str(len(unique_indices)))
+        st.write(unique_indices)
+
+    distances = []  # To store calculated distances
+    for _, _, bucket in hashed_buckets:
+        for item in bucket:
+            vector = np.array(item[0])  # Retrieve the vector from the bucket
+            distance = np.linalg.norm(query - vector)  # Calculate Euclidean distance
+            if (item[1],distance) not in distances:
+                distances.append((item[1], distance))  # Store index and distance
+
+    # Sort distances and retrieve k indices with smallest distances
+    nearest_indices = [index*2 for index, _ in nsmallest(t, distances, key=lambda x: x[1])]
+
+    if query_image%2==0:
+
+        document = feature_collection.find_one({'_id':query_image})
+
+    else:
+
+        document = odd_feature_collection.find_one({'_id':query_image})
+
+    image = np.array(document['image'], dtype=np.uint8)
+
+    display_image_centered(np.array(image),str(query_image))
+
+    show_ksimilar_list(nearest_indices,feature_collection,"")
     
 
 dataset_size = 8677
