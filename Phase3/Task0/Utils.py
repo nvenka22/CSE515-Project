@@ -9,7 +9,6 @@ from tqdm import tqdm
 from sklearn.manifold import smacof
 from sklearn.decomposition import PCA
 from scipy.io import savemat, loadmat
-import tensorflow as tf
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -31,27 +30,22 @@ def create_feature_df_even():
             
     """
 
-    df_stress = pd.DataFrame(columns=["Feature Space", "Original Space", "Latent Space", "delta_stress"])
+    df_stress = pd.DataFrame(columns=["Feature Space", "stress"])
 
     if os.path.exists(os.path.join(ROOT_DIR, "Store/latent_dim.mat")) and os.path.exists(os.path.join(ROOT_DIR, "Store/stress.csv")):
         return
+    print("Doing Dim. reduction for ever feature...")
 
     for feature in tqdm(FEATURES):
         original_space_data = data[feature]
 
         original_space_data_norm = featurenormalize(original_space_data)
-        dissimilarities_original = pairwise_distances(original_space_data_norm)
-        _, stress_original_space = smacof(dissimilarities=dissimilarities_original, init = original_space_data_norm, normalized_stress=True, metric=False)
+       
+        latent_space_data= pca_mle(original_space_data_norm)
         
-        pca = PCA(n_components="mle") #TODO
-        pca.fit(original_space_data_norm)
-        latent_space_data = pca.transform(original_space_data_norm)
-        
-        dissimilarities_latent = pairwise_distances(latent_space_data) ##TODO
+        stress = calculate_stress(original_space_data_norm, latent_space_data)
 
-        _, stress_latent_space = smacof(dissimilarities=dissimilarities_latent, init = latent_space_data, normalized_stress=True, metric=False)
-
-        stress_data = {"Feature Space": feature, "Original Space": stress_original_space, "Latent Space": stress_latent_space, "delta_stress": stress_latent_space - stress_original_space}
+        stress_data = {"Feature Space": feature, "stress": stress}
         df_stress = pd.concat([df_stress, pd.DataFrame([stress_data])], ignore_index=True)
         latent_space_features[feature] = latent_space_data
 
@@ -69,7 +63,7 @@ def get_best_feature_even(df_stress):
         return:
             name of the feature descriptor which best represents the data.
     """
-    return df_stress[df_stress["Latent Space"] == df_stress["Latent Space"].min()]["Feature Space"].values[0]
+    return df_stress[df_stress["stress"] == df_stress["stress"].min()]["Feature Space"].values[0]
 
 def get_inherent_dim_even():
     """
@@ -83,7 +77,7 @@ def get_inherent_dim_even():
     best_feature = get_best_feature_even(df_stress)
 
     inherent_dim = loadmat(os.path.join(ROOT_DIR, "Store/latent_dim.mat"))
-    return inherent_dim[best_feature]
+    return inherent_dim[best_feature]. best_feature 
     
 def get_labelled_features():
     """
@@ -105,11 +99,12 @@ def get_labelled_features():
     """
 
     data = loadmat(ROOT_DIR+'/Store/arrays.mat')
-    labels = tf.argmax(data["labels"], axis=1).numpy()  #TODO
+    labels = np.argmax(data["labels"], axis=1)
     features = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features'] 
 
     label_features = {str(_label):{feature:None for feature in features} for _label in range(101)}
 
+    print("Gathering label wise data...")
     for idx in tqdm(range(len(labels))):
         for feature in features:
             if not isinstance(label_features[str(labels[idx])][feature], np.ndarray):
@@ -142,26 +137,24 @@ def calculate_stress_per_label(label_features):
     
     """
     features = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features']
-    df = pd.DataFrame(columns=["Label", "Feature Space", "Original Space", "Latent Space", "delta_stress"])
+    df = pd.DataFrame(columns=["Label", "Feature Space", "stress"])
     pca = PCA()
+
+    print("Dimentionality Reduction By Label...")
     for label in tqdm(range(101)):
         label = str(label)
         for feature in features:
             ## Calculate Stress for label & feature
             X_norm = featurenormalize(label_features[label][feature])
-            dissimilarities = pairwise_distances(X_norm)
-            _,stress = smacof(dissimilarities=dissimilarities, init = X_norm, normalized_stress=True, metric=False)
-            ## get latent features
 
-            pca.fit(X_norm)
-            X_latent = pca.transform(X_norm)
+            X_latnet= pca_mle(X_norm)
 
             ## Calculate stress for latent features
-            dissimilarities_X_latent = pairwise_distances(X_latent)
-            _,stress_X_latent = smacof(dissimilarities=dissimilarities_X_latent, init = X_latent, normalized_stress=True, metric=False)
+            stress = calculate_stress(X_norm, X_latnet)
             ## Store
-            stress_data = {"Label": label,"Feature Space": feature, "Original Space": stress, "Latent Space": stress_X_latent, "delta_stress": stress_X_latent - stress}
+            stress_data = {"Label": label,"Feature Space": feature, "stress": stress}
             df = pd.concat([df, pd.DataFrame([stress_data])], ignore_index=True)
+
     df.to_csv(os.path.join(ROOT_DIR, "Store/stress_label.csv"), index = False)
     return df
     
@@ -187,7 +180,7 @@ def get_best_inherent_dim_per_label(label_features):
     for label in range(101):
         label = str(label)
         df_label = df[df.Label == label]
-        feature = df_label[df_label["Latent Space"] == df_label["Latent Space"].min()]["Feature Space"].values[0]
+        feature = df_label[df_label["stress"] == df_label["stress"].min()]["Feature Space"].values[0]
         best_feature_per_label.append((label, feature))
     return best_feature_per_label
 
