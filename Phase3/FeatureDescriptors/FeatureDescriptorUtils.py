@@ -2935,10 +2935,10 @@ def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_laten
         sim_scores=[]
         for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
             #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
-            sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+            sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
 
             #print(min(sim_scores),max(sim_scores))
-        output_labels.append(np.argmin(sim_scores))
+        output_labels.append(np.argmax(sim_scores))
         
     # even_label_weighted_latent_semantics_transpose = np.array(even_label_weighted_latent_semantics).T
 
@@ -2978,7 +2978,7 @@ def generate_label_weighted_semantics(image_data,feature_space,k,feature_collect
 def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection):
     mod_path = Path(__file__).parent.parent
     ls_file_path = str(mod_path)+"/LatentSemantics/"
-    k=100
+    k=5
     try:
         data_even = scipy.io.loadmat(ls_file_path+'arrays.mat')
         data_odd  = scipy.io.loadmat(ls_file_path+'arrays_odd.mat')
@@ -2993,8 +2993,6 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         
         #labels_even = data_even['labels']
         #labels_odd = data_odd['labels']
-
-   
 
     #Latent Semantic chosen is ResNet as Feature Model, K-Means as Dimensionality Reduction Technique and 'k' value as 5 for the even images in the dataset. 
     try:
@@ -3027,7 +3025,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         odd_resnet_features = data_odd['resnet_features']
         print(odd_resnet_features.shape)
         
-        odd_latent_semantics = []
+        """odd_latent_semantics = []
         print("Calculating odd LS")
         for idx in tqdm(range(odd_resnet_features.shape[0])):
             feature = odd_resnet_features[idx]
@@ -3036,7 +3034,9 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
                 semantic.append(euclidean_distance_calculator(feature,centroid))
             odd_latent_semantics.append(semantic)
 
-        odd_latent_semantics = np.array(odd_latent_semantics)
+        odd_latent_semantics = np.array(odd_latent_semantics)"""
+
+        odd_latent_semantics = reduce_dimensionality(odd_resnet_features, k, "LDA")
 
         print('Odd Latent Semantics Calculated')
         print(odd_latent_semantics.shape)
