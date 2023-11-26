@@ -270,19 +270,21 @@ def similarity_calculator_by_label(label,feature_space,k,odd_feature_collection,
     display_images_list=[]
     display_indices=[]
     display_similarity_scores=[]
+    return_idx = int(final_scores[0]['imageId'])
     
-    for score in final_scores:
+    """for score in final_scores:
         display_images_list.append(score['image'])
         display_indices.append(score['imageId'])
-        display_similarity_scores.append(score['average_score'])
+        display_similarity_scores.append(score['average_score'])"""
         
     #print("The lengths are :")
     #print(str(len(display_images_list))+" "+str(len(display_indices))+" "+str(len(display_similarity_scores)))
         
     #Call display method for final output
     
-    display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
+    #display_images(display_images_list,display_indices,display_similarity_scores,0,0,"Similarity Score : ")
     print("Exit similarity_calculator_by_label")
+    return return_idx
            
 def similarity_calculator_newimg(imagedata1,odd_feature_collection,feature_collection,similarity_collection,dataset):
 

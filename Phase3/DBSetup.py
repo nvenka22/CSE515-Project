@@ -29,7 +29,7 @@ from MongoDB.MongoDBUtils import *
 mod_path = Path(__file__).parent.parent
 
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
-dbName = 'CSE515-MWD-Vaishnavi-ProjectPhase2'
+dbName = 'CSE515-MWD-ProjectPhase2-Final'
 
 if len(argv) > 1:
 	if argv[1] == "even":
