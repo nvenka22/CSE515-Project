@@ -8,6 +8,22 @@ Phase1/.ipynb_checkpoints/
 
 Phase2/LatentSemantics/arrays.mat
 
+Phase3/LatentSemantics/arrays.mat
+
+Phase3/LatentSemantics/arrays_odd.mat
+
+Phase3/Classifiers
+
+Phase3/Store
+
+*.json
+
+*.zip
+
+*.db
+
+*.pkl
+
 .vscode/*    
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -18,3 +34,5 @@ Phase2/LatentSemantics/arrays.mat
 MongoTransfer.py
 MongoCounter.py
 .vscode/launch.json
+Store/*
+
