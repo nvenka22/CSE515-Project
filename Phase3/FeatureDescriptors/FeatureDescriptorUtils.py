@@ -40,6 +40,7 @@ import streamlit as st
 from pathlib import Path
 from heapq import nsmallest
 import joblib
+from st_aggrid import AgGrid
 
 def load_pickle_file(file_path):
     if os.path.exists(file_path):
@@ -2600,6 +2601,22 @@ def load_model(filename):
                 
 def display_scores(confusion_matrix,true_labels,predictions):
 
+    with st.expander("Confusion Matrix for Classification"):
+        conf = pd.DataFrame(data=confusion_matrix, columns=[str(i) for i in range(0, confusion_matrix.shape[1])])
+        st.dataframe(conf,width = 200000)
+
+    table = {
+    'Image Index': list(range(1,8677,2)),
+    'True Labels': true_labels,
+    'Predicted Labels': predictions
+    }
+
+    # Create a DataFrame
+    table = pd.DataFrame(table)
+
+    with st.expander("Predicted Labels",expanded=False):
+        st.dataframe(table,width = 200000)
+
     labelwise_metrics = {}
     for idx in range(101):
         tp = confusion_matrix[idx][idx]
@@ -2633,13 +2650,13 @@ def display_scores(confusion_matrix,true_labels,predictions):
 
     with st.container():
         for idx in range(101):
-            with st.expander("Label "+str(idx),expanded = True):
+            with st.expander("Label "+str(idx),expanded = False):
                 st.write("Precision: "+str(labelwise_metrics[idx]['Precision']))
                 st.write("Recall: "+str(labelwise_metrics[idx]['Recall']))
                 st.write("F1-Score: "+str(labelwise_metrics[idx]['F1-Score']))
 
 
-def classifier(cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0,teleport_prob=0):
+def classifier(img_id,cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0,teleport_prob=0):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -2671,79 +2688,12 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         odd_data = scipy.io.loadmat(str(odd_desc_path))
         odd_labels = odd_data['labels']
         odd_layer3_features = odd_data['layer3_features']
-        
-    """if cltype == "k-Means":
-
-        kmeans = KMeans(similarity_collection,n_clusters=k)
-        class_centers, classification = kmeans.fit(layer3_features)
-        centroid_dict = {}
-        centroid_label_vote = {}
-        centroid_label_mapping = {}
-
-        print(class_centers,classification)
-
-        print("Taking Label Vote")
-        for idx in tqdm(range(len(classification))):
-            cluster_id = int(classification[idx])
-
-            if cluster_id not in centroid_dict.keys():
-                centroid_dict[cluster_id] = class_centers[cluster_id]
-
-            label = np.where(labels[idx]==1)[0][0]
-
-            if cluster_id in centroid_label_vote.keys():
-                if label in centroid_label_vote[cluster_id]:
-                    centroid_label_vote[cluster_id][label]+=1
-                else:
-                    centroid_label_vote[cluster_id][label]=1
-            else:
-                centroid_label_vote[cluster_id] = {label: 1}
-        
-        for key in centroid_label_vote.keys():
-            centroid_label_mapping[key] = max(centroid_label_vote[key],key = centroid_label_vote[key].get)
-
-        centroid_label_mapping = {key:value for key, value in sorted(centroid_label_mapping.items(), key=lambda item: int(item[0]))}
-        print("Centroid to label mapping:")
-        print(centroid_label_mapping)
-
-        st.write("Clusters assigned to labels:")
-        st.write(list(centroid_label_mapping.values()))
-
-        print("Even features")
-        print(type(layer3_features),layer3_features.shape)
-
-        print("Odd features")
-        print(type(odd_layer3_features),odd_layer3_features.shape)
-
-        odd_class_centers,odd_classification = kmeans.evaluate(odd_layer3_features)
-
-        true_labels = []
-        
-        for idx in range(len(odd_labels)):
-            true_labels.append(np.where(odd_labels[idx]==1)[0][0])
-
-        predictions = []
-
-        confusion_matrix = np.zeros((101,101))
-        print(confusion_matrix.shape)
-
-        for idx in range(len(odd_classification)):
-            c = int(odd_classification[idx])
-            predictions.append(centroid_label_mapping[int(c)])
-
-            l = int(true_labels[idx])
-            confusion_matrix[l][centroid_label_mapping[int(c)]]+=1
-
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
-
-        display_scores(confusion_matrix,true_labels,predictions)"""
 
     if cltype == "Decision Tree":
 
-        max_depth = 25
-        min_size = 2
-        search_size = 50
+        max_depth = 10
+        min_size = 25
+        search_size = 25
 
         tree = DecisionTree(max_depth=max_depth,min_size=min_size)
 
@@ -2779,8 +2729,23 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
+        if img_id%2==0:
+
+            document = feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text ="Query input not an odd index"
+        
+        else:
+
+            document = odd_feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text = "Query Image Tagged to Label "+str(predictions[img_id//2])+" "+get_class_name(predictions[img_id//2])
+
+        with st.expander("Query Image and Label"):
+
+            display_image_centered(np.array(image),str(img_id))
+
+            st.markdown(markdown_text)
 
         display_scores(confusion_matrix,true_labels,predictions)
 
@@ -2808,8 +2773,23 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
+        if img_id%2==0:
+
+            document = feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text ="Query input not an odd index"
+        
+        else:
+
+            document = odd_feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text = "Query Image Tagged to Label "+str(predictions[img_id//2])+" "+get_class_name(predictions[img_id//2])
+
+        with st.expander("Query Image and Label"):
+
+            display_image_centered(np.array(image),str(img_id))
+
+            st.markdown(markdown_text)
 
         display_scores(confusion_matrix,true_labels,predictions)
 
@@ -2828,77 +2808,97 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         personalization = []
         label_totals = {}
 
-        print("Building Adjacency Matrix")
-        for idx in tqdm(range(0,8677,2)):
+        adj_matfile_path = str(mod_path.joinpath("Classifiers","PPR","Pagerank_Adjacencies"+str(teleport_prob)+".mat"))
 
-            scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+        if os.path.exists(adj_matfile_path):
 
-            label = even_labels[int(idx/2)]
-            even_scores = {}
-            label_total = 0
-            label_count = 0
-            
-            for imgid in scores.keys():
-                if int(imgid)%2 == 0:
-                    even_scores[int(imgid)] = scores[imgid]
-                    if even_labels[int(int(imgid)/2)] == label:
-                        label_total += scores[imgid]
-                        label_count += 1
+            ppr_data = scipy.io.loadmat(adj_matfile_path)
 
-            personalization.append(label_total/label_count)
+            adj_matrix = ppr_data['adj_matrix']
 
-            if label in label_totals.keys():
-                label_totals[label]+=label_total/label_count
-            else:
-                label_totals[label]=label_total/label_count
+            odd_adj_matrix = ppr_data['odd_adj_matrix']
 
-            #print("Scores present for "+str(len(scores.keys()))+" images")
+            odd_labels = ppr_data['odd_labels']
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
+            ppr.pagerank_vector = ppr_data['pagerank']
 
-            top_k_even_indices = list(even_scores.keys())
+        else:
 
-            row = np.zeros(4339)
+            print("Building Adjacency Matrix")
+            for idx in tqdm(range(0,8677,2)):
 
-            for indice in top_k_even_indices:
-                row[int(indice/2)] = 1
+                scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
 
-            adj_matrix.append(row)
+                label = even_labels[int(idx/2)]
+                even_scores = {}
+                label_total = 0
+                label_count = 0
+                
+                for imgid in scores.keys():
+                    if int(imgid)%2 == 0:
+                        even_scores[int(imgid)] = scores[imgid]
+                        if even_labels[int(int(imgid)/2)] == label:
+                            label_total += scores[imgid]
+                            label_count += 1
 
-        for idx in range(len(personalization)):
-            personalization[idx]/=label_totals[even_labels[idx]]
+                personalization.append(label_total/label_count)
 
-        adj_matrix = np.array(adj_matrix)
-        even_labels = np.array(even_labels)
-        print("Adjacency Matrix: "+str(adj_matrix.shape)+" Labels: "+str(even_labels.shape))
+                if label in label_totals.keys():
+                    label_totals[label]+=label_total/label_count
+                else:
+                    label_totals[label]=label_total/label_count
 
-        ppr.fit(adj_matrix,even_labels,personalization=personalization)
+                #print("Scores present for "+str(len(scores.keys()))+" images")
 
-        odd_adj_matrix = []
+                even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
 
-        print("Building Adjacency Matrix")
-        for idx in tqdm(range(1,8677,2)):
+                top_k_even_indices = list(even_scores.keys())
 
-            scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+                row = np.zeros(4339)
 
-            even_scores = {}
+                for indice in top_k_even_indices:
+                    row[int(indice/2)] = 1
 
-            for imgid in scores.keys():
-                if int(imgid)%2 == 0:
-                    even_scores[int(imgid)] = scores[imgid]
+                adj_matrix.append(row)
 
-            #print("Scores present for "+str(len(scores.keys()))+" images")
+            for idx in range(len(personalization)):
+                personalization[idx]/=label_totals[even_labels[idx]]
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+            adj_matrix = np.array(adj_matrix)
+            even_labels = np.array(even_labels)
+            print("Adjacency Matrix: "+str(adj_matrix.shape)+" Labels: "+str(even_labels.shape))
 
-            top_k_even_indices = list(even_scores.keys())
+            ppr.fit(adj_matrix,even_labels,personalization=personalization)
 
-            row = np.zeros(4339)
+            odd_adj_matrix = []
 
-            for indice in top_k_even_indices:
-                row[int(indice/2)] = 1
+            print("Building Adjacency Matrix")
+            for idx in tqdm(range(1,8677,2)):
 
-            odd_adj_matrix.append(row)
+                scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+
+                even_scores = {}
+
+                for imgid in scores.keys():
+                    if int(imgid)%2 == 0:
+                        even_scores[int(imgid)] = scores[imgid]
+
+                #print("Scores present for "+str(len(scores.keys()))+" images")
+
+                even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+
+                top_k_even_indices = list(even_scores.keys())
+
+                row = np.zeros(4339)
+
+                for indice in top_k_even_indices:
+                    row[int(indice/2)] = 1
+
+                odd_adj_matrix.append(row)
+
+            odd_adj_matrix = np.array(odd_adj_matrix)
+
+            scipy.io.savemat(adj_matfile_path, {'adj_matrix': adj_matrix, 'odd_adj_matrix': odd_adj_matrix, 'even_labels':even_labels, 'odd_labels': odd_labels, 'pagerank': ppr.pagerank_vector})
 
         odd_adj_matrix = np.array(odd_adj_matrix)
 
@@ -2917,8 +2917,23 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
+        if img_id%2==0:
+
+            document = feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text ="Query input not an odd index"
+        
+        else:
+
+            document = odd_feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text = "Query Image Tagged to Label "+str(predictions[img_id//2])+" "+get_class_name(predictions[img_id//2])
+
+        with st.expander("Query Image and Label"):
+
+            display_image_centered(np.array(image),str(img_id))
+
+            st.markdown(markdown_text)
 
         display_scores(confusion_matrix,true_labels,predictions)
 
@@ -3214,10 +3229,12 @@ def lsh_search(feature_collection,odd_feature_collection,num_layers, num_hashes,
     hashed_buckets = lsh.hash_query_vector(query)
 
     unique_indices = set()
+    hash_values = {}
 
-    for layer, _, bucket in hashed_buckets:
+    for layer, hash_value, bucket in hashed_buckets:
         for item in bucket:
-            unique_indices.add(item[1])  # Collecting unique indices
+            unique_indices.add(item[1]*2)  # Collecting unique indices
+            hash_values[item[1]*2] = hash_value
 
     with st.expander("Unique Vector Indices:"):
         st.write("Number of Unique Indices considered:"+str(len(unique_indices)))
@@ -3247,7 +3264,27 @@ def lsh_search(feature_collection,odd_feature_collection,num_layers, num_hashes,
     display_image_centered(np.array(image),str(query_image))
 
     show_ksimilar_list(nearest_indices,feature_collection,"")
-    
+
+    return nearest_indices, unique_indices, lsh, distances, hash_values
+
+def relevance_feedback(feedback,distances,unique_indices,hash_values,feature_collection):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    try:
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+        
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+str(e))
+        store_by_feature(str(mat_file_path),feature_collection)
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
 
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
