@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from sklearn.metrics.pairwise import cosine_similarity
 from pathlib import Path
-import pickle
+from sys import argv
 
 import streamlit as st
 
@@ -29,19 +29,16 @@ from MongoDB.MongoDBUtils import *
 mod_path = Path(__file__).parent.parent
 
 caltech101 = Caltech101(str(mod_path) + "/caltech101",download=True)
+dbName = 'CSE515-MWD-ProjectPhase2-Final'
 
-if "visibility" not in st.session_state:
-    st.session_state.visibility = "visible"
-    st.session_state.disabled = False
-
-dbName = "CSE515-MWD-ProjectPhase2-Final"
-odd_feature_collection = connect_to_db(dbName,'image_features_odd')
-feature_collection = connect_to_db(dbName,'image_features')
-similarity_collection = connect_to_db(dbName,'image_similarities')
-
-if st.button("Run", type="primary"):
-    with st.spinner('Calculating...'):
-        with st.container():    
-            ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection,caltech101)
+if len(argv) > 1:
+	if argv[1] == "even":
+		collection = connect_to_db(dbName,'image_features')
+		push_even_to_mongodb(caltech101,collection)	
+	
+	else:
+		collection = connect_to_db(dbName,'image_features_odd')
+		push_odd_to_mongodb(caltech101,collection)
+    
 else:
-    st.write("")
+    print('Mention Odd or Even and run it again')

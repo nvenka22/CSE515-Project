@@ -41,15 +41,12 @@ similarity_collection = connect_to_db(dbName,'image_similarities')
 
 option = st.selectbox(
         "Select Classifier",
-        ("Nearest Neighbors","Decision Tree", "PPR","k-Means"),
+        ("Decision Tree", "PPR","k-Means"),
         label_visibility=st.session_state.visibility,
         disabled=st.session_state.disabled,
     )
 
-if option == "Nearest Neighbors":
-    k = st.number_input('Enter k for kNN classifier',placeholder="Type a number...",format = "%d",min_value=1,max_value=4338)
-    teleport_prob = 0
-elif option == "k-Means":
+if option == "k-Means":
     k = st.number_input('Enter k for k-Means classifier',placeholder="Type a number...",format = "%d",min_value=1,max_value=4338)
     teleport_prob = 0
 elif option=="PPR":
