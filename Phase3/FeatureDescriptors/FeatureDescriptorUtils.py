@@ -2877,28 +2877,31 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
     
     
 def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_latent_semantics):
-    print('Enter calculate_label_from_semantic blbbl')
+    print('Enter calculate_label_from_semantic')
     output_labels=[]
     
    # Compute Distances for every row from the odd image latent semantics with every row (label) from the label weighted semantics (even images)
-    for idx in tqdm(range(0,odd_latent_semantics.shape[0])):
-        sim_scores=[]
-        for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
-            #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
-            sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+    # for idx in tqdm(range(0,odd_latent_semantics.shape[0])):
+    #     sim_scores=[]
+    #     for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
+    #         #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+    #         sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
 
-            #print(min(sim_scores),max(sim_scores))
-        output_labels.append(np.argmin(sim_scores))
+    #         #print(min(sim_scores),max(sim_scores))
+    #     output_labels.append(np.argmin(sim_scores))
         
     # even_label_weighted_latent_semantics_transpose = np.array(even_label_weighted_latent_semantics).T
 
-    # image_label_latent_semantic = np.dot(odd_latent_semantics,even_label_weighted_latent_semantics_transpose)
-    # print('Dot product complete')
-    # print(image_label_latent_semantic.shape)
-    # print(image_label_latent_semantic)
-    # for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
-    #     output_labels.append(np.argmin(image_label_latent_semantic[idx]))
-        
+    image_label_latent_semantic = np.dot(odd_latent_semantics,even_label_weighted_latent_semantics)
+    print('Dot product complete')
+    print(image_label_latent_semantic.shape)
+    #print(image_label_latent_semantic) # 4338,5
+    for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
+        scores=[]
+        for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
+            scores.append(euclidean_distance_calculator(image_label_latent_semantic[idx],even_label_weighted_latent_semantics[cmpidx]))
+        output_labels.append(np.argmin(scores))
+            
 
     print(output_labels)
     print('Exit calculate_label_from_semantic')
@@ -2928,8 +2931,29 @@ def generate_label_weighted_semantics(image_data,feature_space,k,feature_collect
         
 
 
+def get_image_label_latent_semantic(similarity_collection,data_odd,dataset):
+    odd_labels = data_odd['labels']
+    image_label_matrix=[]
 
-def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection):
+    for i in tqdm(range(1,len(dataset),2)):
+        image_label_weights =[0]*101
+        label_wise_scores={}
+        similarity_scores = similarity_collection.find_one({'_id': i})
+        for j in range(1,len(dataset),2):
+            img_label = np.where(odd_labels[(int)(j/2)]==1)[0][0]
+            if img_label not in label_wise_scores:
+                label_wise_scores[img_label]=[]
+            label_wise_scores[img_label].append(similarity_scores['fc_softmax_descriptor'][str(j)])
+            for key in label_wise_scores.keys():
+                scores = label_wise_scores[key]
+                image_label_weights[key] = sum(scores)/len(scores)
+        image_label_matrix.append(image_label_weights)
+    
+    return np.array(image_label_matrix)
+
+
+
+def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection,dataset):
     mod_path = Path(__file__).parent.parent
     ls_file_path = str(mod_path)+"/LatentSemantics/"
     k=100
@@ -2952,10 +2976,10 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
     #Latent Semantic chosen is ResNet as Feature Model, K-Means as Dimensionality Reduction Technique and 'k' value as 5 for the even images in the dataset. 
     try:
-        pkl_file_path = ls_file_path+"Phase3_Even_Latent_Semantics_100.pkl"  #Change this file path after new pickle file has been created. 
+        pkl_file_path = ls_file_path+"latent_semantics_3_resnet_k-Means_5_output.pkl"  #Change this file path after new pickle file has been created. 
         with open(pkl_file_path,'rb') as file:
             print('File path is '+pkl_file_path)
-            even_label_weighted_latent_semantics = pickle.load(file)
+            _,even_label_weighted_latent_semantics = pickle.load(file)
             print('Even LS Pickle File Loaded')
             
     
@@ -2969,7 +2993,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
     #Calculate Latent Semantics for Odd Images
     try:
-        odd_ls_file_path = ls_file_path+"odd_latent_semantics_100.pkl"
+        odd_ls_file_path = ls_file_path+"odd_latent_semantics.pkl"
         with open(odd_ls_file_path,'rb') as file:
             print('File path is '+odd_ls_file_path)
             odd_latent_semantics = pickle.load(file)
@@ -2980,7 +3004,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         print('Calculating Latent Semantics for Odd Images')
         odd_resnet_features = data_odd['resnet_features']
         print(odd_resnet_features.shape)
-        odd_latent_semantics = kmeans_decomposition(odd_resnet_features,k)
+        odd_latent_semantics = get_image_label_latent_semantic(similarity_collection,data_odd,dataset)
         print('Odd Latent Semantics Calculated')
         print(odd_latent_semantics.shape)
         pickle.dump(odd_latent_semantics, open(odd_ls_file_path, 'wb+'))
