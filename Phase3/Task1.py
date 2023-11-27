@@ -42,6 +42,6 @@ similarity_collection = connect_to_db(dbName,'image_similarities')
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-            ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection)
+            ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection,caltech101)
 else:
     st.write("")
