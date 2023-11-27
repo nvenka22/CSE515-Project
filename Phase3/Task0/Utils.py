@@ -3,17 +3,16 @@ import math
 import scipy
 import os
 import pandas as pd
-
-from distance_utils import *
+from pathlib import Path
+from Task0.distance_utils import *
 from tqdm import tqdm
 from sklearn.manifold import smacof
-from sklearn.decomposition import PCA
 from scipy.io import savemat, loadmat
 import warnings
 warnings.filterwarnings("ignore")
 
-
-ROOT_DIR = "/root/assignments/mwd/CSE515-Project/"
+mod_path = Path(__file__).parent.parent
+ROOT_DIR = str(mod_path)
 FEATURES = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features']
 data = scipy.io.loadmat(ROOT_DIR+'/Store/arrays.mat')
 latent_space_features = dict()
@@ -33,7 +32,8 @@ def create_feature_df_even():
     df_stress = pd.DataFrame(columns=["Feature Space", "stress"])
 
     if os.path.exists(os.path.join(ROOT_DIR, "Store/latent_dim.mat")) and os.path.exists(os.path.join(ROOT_DIR, "Store/stress.csv")):
-        return
+        df_stress = pd.read_csv(os.path.join(ROOT_DIR, "Store/stress.csv"))
+        return df_stress
     print("Doing Dim. reduction for ever feature...")
 
     for feature in tqdm(FEATURES):
@@ -77,7 +77,7 @@ def get_inherent_dim_even():
     best_feature = get_best_feature_even(df_stress)
 
     inherent_dim = loadmat(os.path.join(ROOT_DIR, "Store/latent_dim.mat"))
-    return inherent_dim[best_feature]. best_feature 
+    return inherent_dim[best_feature], best_feature
     
 def get_labelled_features():
     """
@@ -138,7 +138,6 @@ def calculate_stress_per_label(label_features):
     """
     features = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features']
     df = pd.DataFrame(columns=["Label", "Feature Space", "stress"])
-    pca = PCA()
 
     print("Dimentionality Reduction By Label...")
     for label in tqdm(range(101)):

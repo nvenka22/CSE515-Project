@@ -25,6 +25,7 @@ from Utilities.DisplayUtils import *
 from FeatureDescriptors.FeatureDescriptorUtils import *
 from FeatureDescriptors.SimilarityScoreUtils import *
 from MongoDB.MongoDBUtils import *
+from Task0.Utils import get_inherent_dim_label
 
 mod_path = Path(__file__).parent.parent
 
@@ -42,6 +43,7 @@ similarity_collection = connect_to_db(dbName,'image_similarities')
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
-            ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection)
+            features_label = get_inherent_dim_label()
+            st.write(features_label)
 else:
     st.write("")
