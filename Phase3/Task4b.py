@@ -11,14 +11,6 @@ from PIL import Image
 import warnings
 warnings.filterwarnings("ignore")
 from scipy.spatial.distance import cosine
-from tqdm import tqdm
-from scipy.stats import skew
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from sklearn.metrics.pairwise import cosine_similarity
-from pathlib import Path
-import pickle
-
 import streamlit as st
 
 from Utilities.DisplayUtils import *
@@ -39,7 +31,8 @@ t = st.number_input('Enter t for t similar images',placeholder="Type a number...
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
-        with st.container():    
-            lsh_search(feature_collection,odd_feature_collection,num_layers, num_hashes,query_image,t)
+        with st.container():  
+            lsh = lsh_calc(feature_collection,num_layers, num_hashes)
+            lsh_search(feature_collection,odd_feature_collection,lsh,query_image,t)
 else:
     st.write("")
