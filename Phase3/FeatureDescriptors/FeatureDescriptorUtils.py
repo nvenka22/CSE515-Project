@@ -29,8 +29,13 @@ import streamlit as st
 from pathlib import Path
 from heapq import nsmallest
 import joblib
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, normalize
+from sklearn.manifold import MDS
 from cvxopt import matrix, solvers
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import pairwise_distances
 
 def load_pickle_file(file_path):
     if os.path.exists(file_path):
@@ -2420,7 +2425,7 @@ def load_model(filename):
     # Load a saved decision tree model from a file using joblib
     return joblib.load(filename)
                 
-def display_scores(confusion_matrix,true_labels,predictions):
+def display_scores(confusion_matrix,true_labels,predictions,acc=None):
 
     with st.expander("Confusion Matrix for Classification"):
         conf = pd.DataFrame(data=confusion_matrix, columns=[str(i) for i in range(0, confusion_matrix.shape[1])])
@@ -2464,6 +2469,8 @@ def display_scores(confusion_matrix,true_labels,predictions):
             truecount+=1
  
     accuracy = truecount/len(predictions)
+    if acc!=None:
+        accuracy = acc
 
     st.write("Accuracy Scores:")
     st.write("Overall Accuracy: "+str(accuracy))
@@ -3191,7 +3198,7 @@ class LinearSVC:
 
         return predictions
     
-def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection):
+def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -3397,13 +3404,378 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
     
     else:
 
-        y_train /=3
+        y_train = [y/3 for y in y_train]
 
-        st.write(y_train)
+        #st.write(y_train)
 
         st.markdown("Updated Results based on Feedback")
 
+        y_test = []
+
+        for row_index in tqdm(range(len(X_test))):
+
+            sim_scores = []
+
+            index = test_indices[row_index]
+
+            train_indices = []
+
+            for feedback_index in feedback.keys():
+
+                sim_scores.append(similarity_collection.find_one({'_id':feedback_index})["avgpool_descriptor"][str(index)])
+                train_indices.append(feedback_index)
+
+            #print("Row Index: "+str(row_index)+" Sim Scores: "+str(sim_scores))
+
+            for idx in range(len(y_train)):  
+                sim_scores[idx] *= y_train[idx]
+
+            #print("Prob Values: "+str(sim_scores))
+
+            prob_value = np.max(sim_scores)
+
+            y_test.append(prob_value)
+
+        nearest_indices = []
+        for feedback_index in feedback.keys():
+            if feedback[feedback_index]/3 == 1:
+                nearest_indices.append(feedback_index)
+
+        req = 10 - len(nearest_indices)
+
+        best_indices = np.argsort(y_test)[-req:][::-1]
+
+        for indice in best_indices:
+            nearest_indices.append(test_indices[indice])
+
         show_ksimilar_list(nearest_indices,feature_collection,"")
+
+class DBScan:
+    def __init__(self, eps, min_samples):
+        self.eps = eps
+        self.min_samples = min_samples
+        self.labels = None
+
+    def fit_predict(self, X):
+        print("Fitting Dbscan Model!")
+        self.labels = np.full(X.shape[0], -1)  # Initialize labels as unassigned (-1)
+        cluster_label = 0
+
+        for i in tqdm(range(X.shape[0])):
+            if self.labels[i] != -1:
+                continue  # Skip points already assigned to a cluster
+
+            neighbors = self.find_neighbors(X, i)
+
+            if len(neighbors) < self.min_samples:
+                self.labels[i] = 0  # Label as noise
+            else:
+                cluster_label += 1
+                self.expand_cluster(X, i, neighbors, cluster_label)
+
+        return self.labels
+
+    def find_neighbors(self, X, center_idx):
+        neighbors = []
+        for i in range(X.shape[0]):
+            if np.linalg.norm(X[center_idx] - X[i]) < self.eps:
+                neighbors.append(i)
+        return neighbors
+
+    def expand_cluster(self, X, center_idx, neighbors, cluster_label):
+        self.labels[center_idx] = cluster_label
+
+        for neighbor in neighbors:
+            if self.labels[neighbor] == -1:
+                self.labels[neighbor] = cluster_label
+                new_neighbors = self.find_neighbors(X, neighbor)
+
+                if len(new_neighbors) >= self.min_samples:
+                    neighbors.extend(new_neighbors)   
+
+
+def calculate_distances(X):
+    print("\n#IN CALCULATE DISTANCE")
+    num_records = len(X)
+    
+    euclidean_distances = pairwise_distances(X)
+    print("Shape of distance matrix: ", euclidean_distances.shape)
+    print("Type of distance matrix: ", type(euclidean_distances))
+    
+    for i in range(num_records):
+        if(i%100==0):
+            print("Length euclidean_distances[",i,"]: ", len(euclidean_distances[i]))
+            print("Average distance of sample ",i, " against other samples: ", sum(euclidean_distances[i])/num_records)
+    average_distances = []
+    
+    cos_sim = cosine_similarity(X)
+    
+    for i in range(num_records):
+        average_distances.append(sum(euclidean_distances[i])/num_records)
+    
+    return np.array(sum(average_distances)/num_records), euclidean_distances
+
+def perform_mds(X):
+    st.write("Started MDS")
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = str(mod_path.joinpath("Classifiers","DBScan","mds.mat"))
+
+    if((os.path.exists(mat_file_path))==False):
+        print("Inside mds if")
+        embedding = MDS(n_components=2, normalized_stress='auto')
+        X_mds = embedding.fit_transform(X)
+        st.write("Transformed X shape:", X_mds.shape)
+        savedict = {
+            'X_mds' : X_mds
+        }
+        scipy.io.savemat(mat_file_path, savedict)
+    
+    mds_data = scipy.io.loadmat(mat_file_path)
+    X_mds = mds_data['X_mds']
+    X_mds = np.array(X_mds)
+
+    return X_mds
+
+def preprocess_dbscan(images_resnet):
+    scaler = MinMaxScaler()
+    images = scaler.fit_transform(np.array(images_resnet))
+    images = normalize(images, norm='l2')
+
+    return images
+
+def set_dbscan_params(n_clusters_):
+    if(n_clusters_==5):
+        epsilon = 0.8
+        min_samples = 16
+
+    else:
+        epsilon = 0.7
+        min_samples = 24
+
+    return epsilon, min_samples
+
+def get_dbscan_cluster_details(n_clusters_, n_noise_, labels):
+    clusters = []
+
+    print("Estimated number of clusters: %d" % n_clusters_)
+    print("Estimated number of noise points: %d" % n_noise_)
+
+    print("No. of instances in each label: ")
+
+    for i in range(n_clusters_+1):
+        clusters.append(2*np.where(labels==i)[0])
+        print("Length of Cluster", i, ": ",len(clusters[i]))
+        print("Cluster",i,":\n")
+        n = list(labels).count(i)
+
+    return clusters
+
+def plot_dbscan_clusters(labels, unique_labels, images_MDS):
+    colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_labels)))
+
+    plt.figure(figsize=(8, 8))
+
+    for label, color in zip(unique_labels, colors):
+        cluster_points = images_MDS[labels == label]
+        plt.scatter(cluster_points[:, 0], cluster_points[:, 1], c=[color], cmap=ListedColormap(colors), label=f'Cluster {label}', s=4)
+
+    plt.legend()
+    st.set_option('deprecation.showPyplotGlobalUse', False)
+    st.pyplot(plt.show())
+
+def plot_image_clusters(clusters, feature_collection):
+    for i in range(0,len(clusters)):
+        size = 20
+        if(len(clusters[i])<20):
+            size = len(clusters[i])
+        cluster = np.random.choice(clusters[i], size=size, replace=False)
+        st.write("CLUSTER", i)
+        show_ksimilar_list(cluster,feature_collection,"")
+
+def dbscan_predict(feature_collection, odd_feature_collection, caltech101, images, true_labels, clusters, n_clusters_):
+    even_images_resnet, even_true_labels, odd_images_resnet, odd_true_labels = get_data(feature_collection, odd_feature_collection)
+
+    odd_images = preprocess_dbscan(odd_images_resnet)
+
+    odd_predicted_labels = []
+
+    build = []
+
+    for i in range(n_clusters_+1):
+        cluster = []
+        for k in clusters[i]:
+            cluster.append(images[int(k/2)])
+        build.append(cluster)
+        cluster = np.array(cluster)
+
+    count = 0
+    
+    for idx in range(1, len(caltech101), 2):
+        euclidean_distances = []
+        odd_image = odd_images[int(idx/2)].reshape(1, -1)
+    
+        for i in range(len(clusters)):
+            cluster = np.array(build[i])
+            euclidean_distances.append(np.mean(pairwise_distances(odd_image, cluster)[0]))
+        
+        assigned_cluster_number = euclidean_distances.index(min(euclidean_distances)) 
+    
+        if((idx-1)%200==0):
+            print("Assigned cluster for image: ", idx, "is ", assigned_cluster_number)
+    
+        most_similar_images = np.array(build[assigned_cluster_number])
+    
+        y = []
+        for i in clusters[assigned_cluster_number]:
+            y.append(true_labels[int(i/2)])
+        
+        y = np.array(y)
+    
+    
+        neigh = KNeighborsClassifier(n_neighbors=5)
+        neigh.fit(most_similar_images, y)
+    
+        prediction = neigh.predict(odd_image)
+        odd_predicted_labels.append(prediction)
+
+    
+        if(odd_predicted_labels[int(idx/2)]==odd_true_labels[int(idx/2)]):
+            count = count + 1
+    
+    accuracy = count/4388
+    return np.round(accuracy*100, 2), odd_predicted_labels
+
+def get_data(feature_collection, odd_feature_collection):
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    print("Mat file path:", mat_file_path, "Even mat file path: ", even_desc_path, "Odd mat file path: ", odd_desc_path)
+
+    try:
+
+        even_data = scipy.io.loadmat(str(even_desc_path))
+        even_labels = even_data['labels']
+        even_fc_features = np.array(even_data['fc_features'], dtype=np.uint8)
+
+        odd_data = scipy.io.loadmat(str(odd_desc_path))
+        odd_labels = odd_data['labels']
+        odd_fc_features = np.array(odd_data['fc_features'], dtype=np.uint8)
+
+        even_true_labels = []
+        odd_true_labels = []
+
+        for idx in range(len(even_labels)):
+            even_true_labels.append(np.where(even_labels[idx]==1)[0][0])
+
+        even_true_labels = [data[x] for x in np.array(even_true_labels).tolist()]
+        
+        
+        for idx in range(len(odd_labels)):
+            odd_true_labels.append(np.where(odd_labels[idx]==1)[0][0])
+        
+        odd_true_labels = [data[x] for x in np.array(odd_true_labels).tolist()]
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(str(mat_file_path),feature_collection)
+        store_by_feature_odd(str(mat_file_path),odd_feature_collection)
+
+        even_data = scipy.io.loadmat(str(even_desc_path))
+        even_labels = even_data['labels']
+        even_fc_features = even_data['fc_features']
+
+        odd_data = scipy.io.loadmat(str(odd_desc_path))
+        odd_labels = odd_data['labels']
+        odd_fc_features = odd_data['fc_features']
+
+    return even_fc_features, even_true_labels, odd_fc_features, odd_true_labels
+
+def model_dbscan(caltech101, feature_collection, odd_feature_collection, data, n_clusters_ = 5):
+    even_images_resnet, even_true_labels, odd_images_resnet, odd_true_labels = get_data(feature_collection, odd_feature_collection)
+
+    print("Even images shape: ", even_images_resnet.shape)
+    print("Odd images shape: ", odd_images_resnet.shape)
+    print("Even data type: ", type(even_images_resnet))
+    print("Odd data type: ", type(odd_images_resnet))
+    print("Even labels shape: ", type(even_true_labels), len(even_true_labels))
+    print("Odd labels shape: ", type(odd_true_labels), len(odd_true_labels))
+
+    # print(even_true_labels[:500])
+    # print(odd_true_labels[:500])
+
+    # labels_arr = np.array(even_true_labels)
+    # unique, counts = np.unique(labels_arr, return_counts=True)
+
+    # labels_arr = np.asarray((unique, counts)).T
+    # print(labels_arr)
+
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path.joinpath("Classifiers","DBScan","odd_predicted_labels"+str(n_clusters_)+".pkl"))
+
+    if os.path.exists(pkl_file_path):
+
+        accuracy, odd_predicted_labels, labels, unique_labels, images_MDS, clusters = load_pickle_file(pkl_file_path)
+
+    else:
+
+        images = preprocess_dbscan(even_images_resnet)
+        print("Pre-Processing done")
+        epsilon, min_samples = set_dbscan_params(n_clusters_)
+        st.write("DBScan parameters:\nEpsilon = ", epsilon, "\nMin samples = ", min_samples)
+
+        dbscan = DBScan(epsilon, min_samples)
+        labels = dbscan.fit_predict(images)
+        print("Finished fitting DBscan model!")
+        unique_labels = np.unique(labels)
+        n_noise_ = list(labels).count(0)
+
+        clusters = get_dbscan_cluster_details(n_clusters_, n_noise_, labels)
+
+        images_MDS = perform_mds(images)
+
+        print(type(images_MDS))
+
+        accuracy, odd_predicted_labels = dbscan_predict(feature_collection, odd_feature_collection, caltech101, images, even_true_labels, clusters, n_clusters_)
+
+        pickle.dump((accuracy, odd_predicted_labels, labels, unique_labels, images_MDS, clusters), open(pkl_file_path, 'wb+'))
+        
+    st.write("Clusters Visualised on a 2-Dimensional MDS Space")
+    plot_dbscan_clusters(labels, unique_labels, images_MDS)
+
+    st.write("Images Visualised as Clusters")
+    plot_image_clusters(clusters, feature_collection)
+
+    otl = odd_true_labels
+    opl = odd_predicted_labels
+
+    confusion_matrix = np.zeros((101,101))
+    odd_predicted_labels = np.array(odd_predicted_labels)
+
+    for i in range(len(odd_predicted_labels)):
+        for k, v in data.items():  
+            if v == odd_predicted_labels[i]:
+                odd_predicted_labels[i] = k
+
+    for i in range(len(odd_true_labels)):
+        for k, v in data.items():  
+            if v == odd_true_labels[i]:
+                odd_true_labels[i] = k
+
+    for idx in range(len(odd_true_labels)):
+
+        l = int(odd_true_labels[idx])
+        c = int(odd_predicted_labels[idx])
+        confusion_matrix[l][c]+=1
+
+    with st.expander("Confusion Matrix for Classification"):
+        st.write(confusion_matrix)
+
+    display_scores(confusion_matrix,otl,opl,accuracy)
+
         
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
