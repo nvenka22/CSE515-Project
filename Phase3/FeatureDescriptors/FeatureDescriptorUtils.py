@@ -2604,7 +2604,7 @@ def load_model(filename):
     # Load a saved decision tree model from a file using joblib
     return joblib.load(filename)
                 
-def display_scores(confusion_matrix,true_labels,predictions):
+def display_scores(confusion_matrix,true_labels,predictions,acc=None):
 
     labelwise_metrics = {}
     for idx in range(101):
@@ -2630,8 +2630,10 @@ def display_scores(confusion_matrix,true_labels,predictions):
     for idx in range(len(predictions)):
         if predictions[idx] == true_labels[idx]:
             truecount+=1
- 
+    
+
     accuracy = truecount/len(predictions)
+    accuracy = acc
 
     st.write("Accuracy Scores:")
     st.write("Overall Accuracy: "+str(accuracy))
@@ -3536,10 +3538,6 @@ def model_dbscan(caltech101, feature_collection, odd_feature_collection, data, n
     plot_image_clusters(clusters, feature_collection)
 
     accuracy, odd_predicted_labels = dbscan_predict(feature_collection, odd_feature_collection, caltech101, images, even_true_labels, clusters, n_clusters_)
-    st.write("Accuracy: ", accuracy)
-
-    print("Type odd true labels: ", type(odd_true_labels))
-    print("Type odd predicted labels: ", type(odd_predicted_labels))
 
     otl = odd_true_labels
     opl = odd_predicted_labels
@@ -3566,7 +3564,7 @@ def model_dbscan(caltech101, feature_collection, odd_feature_collection, data, n
     with st.expander("Confusion Matrix for Classification"):
         st.write(confusion_matrix)
 
-    display_scores(confusion_matrix,otl,opl)
+    display_scores(confusion_matrix,otl,opl,accuracy)
 
 
 
