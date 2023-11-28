@@ -3209,26 +3209,25 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
         store_by_feature(str(mat_file_path),feature_collection)
         data_even = scipy.io.loadmat(even_desc_path)
         data_odd = scipy.io.loadmat(odd_desc_path)
+
+    X_train = []
+    y_train = []
+    X_test = []
+    test_indices = {}
+
+    for index in feedback.keys():
+        X_train.append(data_even['avgpool_features'][index//2])
+        y_train.append(feedback[index])
+
+    #st.write(X_train)
+    #st.write(y_train)
+
+    for index in sorted(unique_indices):
+        if index not in feedback.keys():
+            X_test.append(data_even['avgpool_features'][index//2])
+            test_indices[len(X_test)-1] = index
     
     if option == "SVM":
-        X_train = []
-        y_train = []
-        X_test = []
-        test_indices = {}
-
-        for index in feedback.keys():
-            X_train.append(data_even['avgpool_features'][index//2])
-            y_train.append(feedback[index])
-
-        #st.write(X_train)
-        #st.write(y_train)
-
-        for index in sorted(unique_indices):
-            if index not in feedback.keys():
-                X_test.append(data_even['avgpool_features'][index//2])
-                test_indices[len(X_test)-1] = index
-
-        #st.write(X_test)
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
@@ -3398,8 +3397,14 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
     
     else:
 
-        pass
+        y_train /=3
 
+        st.write(y_train)
+
+        st.markdown("Updated Results based on Feedback")
+
+        show_ksimilar_list(nearest_indices,feature_collection,"")
+        
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
 dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]
