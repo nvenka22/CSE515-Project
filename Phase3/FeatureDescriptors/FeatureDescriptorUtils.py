@@ -2427,20 +2427,30 @@ def load_model(filename):
                 
 def display_scores(confusion_matrix,true_labels,predictions,acc=None):
 
-    with st.expander("Confusion Matrix for Classification"):
+    with st.expander("Confusion Matrix for Classification",expanded = True):
         conf = pd.DataFrame(data=confusion_matrix, columns=[str(i) for i in range(0, confusion_matrix.shape[1])])
         st.dataframe(conf,width = 200000)
 
-    table = {
-    'Image Index': list(range(1,8677,2)),
-    'True Labels': true_labels,
-    'Predicted Labels': predictions
-    }
+    if acc!=None:
+        labelslist = []
+        for label in true_labels:
+            labelslist.append(get_class_name(label))
+        table = {
+        'Image Index': list(range(1,8677,2)),
+        'True Labels': labelslist,
+        'Predicted Labels': predictions
+        }
+    else:
+        table = {
+        'Image Index': list(range(1,8677,2)),
+        'True Labels': true_labels,
+        'Predicted Labels': predictions
+        }
 
     # Create a DataFrame
     table = pd.DataFrame(table)
 
-    with st.expander("Predicted Labels",expanded=False):
+    with st.expander("Predicted Labels",expanded=True):
         st.dataframe(table,width = 200000)
 
     labelwise_metrics = {}
@@ -2476,9 +2486,12 @@ def display_scores(confusion_matrix,true_labels,predictions,acc=None):
     st.write("Overall Accuracy: "+str(accuracy))
     #st.write(confusion_matrix)
 
+    df = pd.DataFrame({label: values for label, values in labelwise_metrics.items()}).T
+    st.dataframe(df)
+
     with st.container():
         for idx in range(101):
-            with st.expander("Label "+str(idx),expanded = False):
+            with st.expander("Label "+str(idx),expanded = True):
                 st.write("Precision: "+str(labelwise_metrics[idx]['Precision']))
                 st.write("Recall: "+str(labelwise_metrics[idx]['Recall']))
                 st.write("F1-Score: "+str(labelwise_metrics[idx]['F1-Score']))
@@ -2846,7 +2859,7 @@ def get_image_label_latent_semantic(similarity_collection,data_odd,dataset):
 
 
 
-def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection,dataset):
+def ls_even_by_label(k,feature_collection, odd_feature_collection, similarity_collection,dataset):
     mod_path = Path(__file__).parent.parent
     ls_file_path = str(mod_path)+"/LatentSemantics/"
     k=5
@@ -2867,7 +2880,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
     #Latent Semantic chosen is ResNet as Feature Model, K-Means as Dimensionality Reduction Technique and 'k' value as 5 for the even images in the dataset. 
     try:
-        pkl_file_path = ls_file_path+"latent_semantics_3_resnet_k-Means_5_output.pkl"  #Change this file path after new pickle file has been created. 
+        pkl_file_path = ls_file_path+"latent_semantics_3_resnet_k-Means_"+str(k)+"_output.pkl"  #Change this file path after new pickle file has been created. 
         with open(pkl_file_path,'rb') as file:
             print('File path is '+pkl_file_path)
             _,even_label_weighted_latent_semantics = pickle.load(file)
@@ -2938,41 +2951,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         l = int(true_labels[idx])
         confusion_matrix[l][c]+=1
 
-    labelwise_metrics = {}
-    for idx in range(101):
-        tp = confusion_matrix[idx][idx]
-        fn = sum(confusion_matrix[idx]) - confusion_matrix[idx][idx]
-        tn = 0
-        fp = 0
-        for r in range(101):
-            for c in range(101):
-                if r!= idx and c!=idx:
-                    tn+=1
-                if c == idx and r!=idx:
-                    fp+=1
-        precision = tp / (tp+fp)
-        recall = tp / (tp+fn)
-        f1_score = (2*precision*recall) / (precision+recall)
-        labelwise_metrics[idx] = {"Precision":precision,"Recall":recall,"F1-Score":f1_score}
-
-    truecount = 0
-
-    for idx in range(len(predictions)):
-        if predictions[idx] == true_labels[idx]:
-            truecount+=1
-
-    accuracy = truecount/len(predictions)
-
-    st.write("Accuracy Scores:")
-    st.write("Overall Accuracy: "+str(accuracy))
-    st.write(confusion_matrix)
-
-    with st.container():
-        for idx in range(101):
-            with st.expander("Label "+str(idx)):
-                st.write("Precision: "+str(labelwise_metrics[idx]["Precision"]))
-                st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
-                st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
+    display_scores(confusion_matrix,true_labels,predictions)
     
 class LSH:
     def __init__(self, num_layers, num_hashes, input_dim):
@@ -3202,7 +3181,7 @@ class LinearSVC:
 
         return predictions
     
-def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection):
+def relevance_feedback(t,option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -3300,7 +3279,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
         distances = [np.sqrt(np.sum((avgpoolarray - vector)**2)) for vector in reorder_X_test]
 
-        required_num = 10 - len(nearest_indices)
+        required_num = t - len(nearest_indices)
         print("Required Num: "+str(required_num))
         min_indices = np.argsort(distances)[:required_num]
 
@@ -3330,7 +3309,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
                     if len(nearest_indices)<10:
                                 nearest_indices.append(index)
 
-            required_num = 10 - len(nearest_indices)
+            required_num = t - len(nearest_indices)
             print("Required Num: "+str(required_num))
             min_indices = np.argsort(distances)[:required_num]
 
@@ -3340,7 +3319,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
             print(str(len(nearest_indices))+" after score 2")
 
-            if len(nearest_indices)<10:
+            if len(nearest_indices)<t:
 
                 relevant_indices = {}
 
@@ -3360,7 +3339,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
                                 if len(nearest_indices)<10:
                                     nearest_indices.append(index)
 
-                required_num = 10 - len(nearest_indices)
+                required_num = t - len(nearest_indices)
                 print("Required Num: "+str(required_num))
                 min_indices = np.argsort(distances)[:required_num]
 
@@ -3370,7 +3349,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
                 print(str(len(nearest_indices))+" after score 1")
 
-                if len(nearest_indices)<10:
+                if len(nearest_indices)<t:
 
                     relevant_indices = {}
 
@@ -3387,10 +3366,10 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
                     for index in feedback.keys():
                         if feedback[index] == 0:
-                            if len(nearest_indices)<10:
+                            if len(nearest_indices)<t:
                                 nearest_indices.append(index)
 
-                    required_num = 10 - len(nearest_indices)
+                    required_num = t - len(nearest_indices)
                     print("Required Num: "+str(required_num))
                     min_indices = np.argsort(distances)[:required_num]
 
@@ -3445,7 +3424,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
             if feedback[feedback_index]/3 == 1:
                 nearest_indices.append(feedback_index)
 
-        req = 10 - len(nearest_indices)
+        req = t - len(nearest_indices)
 
         best_indices = np.argsort(y_test)[-req:][::-1]
 

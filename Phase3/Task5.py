@@ -58,4 +58,4 @@ if st.button('Submit Feedback',type="primary"):
     for index in nearest_indices:
         feedback[index] = int(feedback_vals[idx].strip())
         idx+=1
-    relevance_feedback(option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection)
+    relevance_feedback(t,option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection)
