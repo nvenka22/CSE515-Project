@@ -28,6 +28,8 @@ if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
             features, feature_name  = get_inherent_dim_even()
+            st.write(feature_name)
+            st.write(features.shape)
             st.write(features)
 else:
     st.write("")
