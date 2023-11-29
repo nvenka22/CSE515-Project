@@ -2885,8 +2885,12 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
             print('File path is '+pkl_file_path)
             _,even_label_weighted_latent_semantics = pickle.load(file)
             print('Even LS Pickle File Loaded')
-            
-    
+        # pkl_file_path = ls_file_path+"TASK5_fc_k5_kmeans.csv"  #Change this file path after new pickle file has been created. 
+        # print('File path is '+pkl_file_path)
+        # even_label_weighted_latent_semantics = pd.read_csv(pkl_file_path)
+
+        print('Even LS Pickle File Loaded')
+
     except (FileNotFoundError) as e:
         even_label_weighted_latent_semantics, centroids = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
         pickle.dump((even_label_weighted_latent_semantics,centroids), open(pkl_file_path, 'wb+'))

@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 mod_path = Path(__file__).parent.parent
-ROOT_DIR = str(mod_path)
+ROOT_DIR = str(mod_path.parent)
 FEATURES = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features']
 data = scipy.io.loadmat(ROOT_DIR+'/Store/arrays.mat')
 latent_space_features = dict()
@@ -28,10 +28,6 @@ def create_feature_df_even():
     """
 
     df_stress = pd.DataFrame(columns=["Feature Space", "stress"])
-
-    if os.path.exists(os.path.join(ROOT_DIR, "Store/latent_dim.mat")) and os.path.exists(os.path.join(ROOT_DIR, "Store/stress.csv")):
-        df_stress = pd.read_csv(os.path.join(ROOT_DIR, "Store/stress.csv"))
-        return df_stress
     print("Doing Dim. reduction for ever feature...")
 
     for feature in tqdm(FEATURES):
