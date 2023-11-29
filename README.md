@@ -2,11 +2,15 @@
 
 ## Folder Structure
 
-The Phase 1 Folder contains the submission from Phase 1. This is just placed here and is not required to run Phase 2 Submission Programs.
-
-The Phase 2 Folder Contains each Submission program as a .py file. These applications are run on streamlit, and to run the programs the command line instruction is:
+The Phase 3 Folder Contains each Submission program as a .py file. These applications are run on streamlit, and to run the programs the command line instruction is:
 ```
 streamlit run Task<insert Task Number>.py
+```
+
+For Task 5 alone, the command line instruction is : 
+
+```
+streamlit run Task5.py number_of_layers number_of_hashes ImageID t for_t_similar_images
 ```
 
 ## Requirements
