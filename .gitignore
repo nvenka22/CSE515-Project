@@ -34,5 +34,8 @@ Phase3/Store
 MongoTransfer.py
 MongoCounter.py
 .vscode/launch.json
-Store/*
 
+Store/*
+!Store/.gitkeep 
+
+.vscode/settings.json

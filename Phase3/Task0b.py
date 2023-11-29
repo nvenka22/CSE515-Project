@@ -28,6 +28,11 @@ if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
         with st.container():    
             features_label = get_inherent_dim_label()
+            results = {}
+            for label, dim in features_label.items():
+                results[label] = {"Feature Name": dim[0], "Dimentions": dim[1].shape}
+
+            st.write(results)
             st.write(features_label)
 else:
     st.write("")
