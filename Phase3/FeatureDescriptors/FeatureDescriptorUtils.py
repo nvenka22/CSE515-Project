@@ -2,44 +2,40 @@ import os
 import cv2
 from torchvision.models import resnet50
 from torchvision.datasets import Caltech101
-from torch.autograd import Variable
 import pandas as pd
 import numpy as np
-import random
-from numpy.random import uniform
 import torch
 import torchvision.transforms as transforms
-from scipy.stats import moment
 from PIL import Image
 import warnings
 warnings.filterwarnings("ignore")
-from scipy.spatial.distance import cosine
 from tqdm import tqdm
 from scipy.stats import skew
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn import preprocessing as p
 import pickle
 import scipy.io
-from tensorly.decomposition import parafac
 import tensorly as tl
 import scipy.misc
 import tensortools as tt
 from tensortools.operations import unfold as tt_unfold, khatri_rao
-from tensorly import unfold as tl_unfold
 import os
 from scipy import linalg
-from math import sqrt
 from FeatureDescriptors.SimilarityScoreUtils import *
 from Utilities.DisplayUtils import *
 import streamlit as st
 from pathlib import Path
-from collections import defaultdict
-import copyreg
+from heapq import nsmallest
+import joblib
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, normalize
+from sklearn.manifold import MDS
+from cvxopt import matrix, solvers
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import pairwise_distances
 
 def load_pickle_file(file_path):
     if os.path.exists(file_path):
@@ -572,7 +568,7 @@ def kmeans_decomposition(X, k, max_iterations=100):
     # Compute distances to centroids as the decomposition
     distances = np.linalg.norm(X[:, np.newaxis] - centroids, axis=2)
 
-    return distances
+    return distances, centroids
 
 def reduce_dimensionality(feature_model, k, technique):
     if technique == 'SVD':
@@ -2211,130 +2207,6 @@ def task10(label,latentk,feature_model,dimred,latsem,k,odd_feature_collection,fe
 
 ###################################################################   PHASE 3 CODE  ###########################################################################
 
-def euclidean(point, data):
-        dists = []
-        for d in data:
-            dists.append(np.sqrt(np.sum((point - d)**2)))
-        return dists
-
-class KMeans:
-
-    def __init__(self,collection, n_clusters=8, max_iter=50):
-        self.n_clusters = n_clusters
-        self.max_iter = max_iter
-        self.collection = collection
-
-    def fit(self, X_train):
-        print(X_train.shape)
-
-        mod_path = Path(__file__).parent.parent
-        pkl_file_path = str(mod_path)+"/Classifiers/kNN/"
-        output_file = pkl_file_path+str(self.n_clusters)+".pkl"
-
-        if os.path.exists(output_file):
-            self.centroids, train_centroid_idxs = load_pickle_file(output_file)
-
-        else:
-
-            self.centroids = []
-            centroid_idxs = []
-            split = int(X_train.shape[0]/self.n_clusters)
-            for idx in range(0,X_train.shape[0],split):
-                centroid_idxs.append(idx)
-                self.centroids.append(X_train[idx])
-                if len(self.centroids)==self.n_clusters:
-                    break
-
-            print("Number of centroids picked: "+str(len(self.centroids)))
-
-            iteration = 0
-            prev_centroids = None
-            while np.not_equal(self.centroids, prev_centroids).any() and iteration < self.max_iter:
-                sorted_points = [[] for _ in range(self.n_clusters)]
-                print("Iteration " + str(iteration))
-                for idx in tqdm(range(len(X_train))):
-                    x = X_train[idx]
-                    dists = euclidean(x, self.centroids)
-                    centroid_idx = np.argmin(dists)
-                    sorted_points[centroid_idx].append(x)
-
-                print("Cluster Sizes: ")
-                for cluster in sorted_points:
-                    print(len(cluster))
-
-                prev_centroids = self.centroids
-                self.centroids = [np.mean(cluster, axis=0) if cluster else np.nan*np.zeros_like(self.centroids[0])
-                                for cluster in sorted_points]
-
-                iteration += 1
-
-            # Metrics for the training set using the last iteration centroids
-            train_centroid_idxs = np.array([np.argmin(euclidean(x, self.centroids)) for x in X_train])
-
-            pickle.dump((self.centroids,train_centroid_idxs), open(output_file, 'wb+'))
-        
-        return self.centroids, train_centroid_idxs
-
-    def evaluate(self, X):
-        centroids = []
-        centroid_idxs = []
-        print("Classifying")
-        for idx in tqdm(range(len(X))):
-            x = X[idx]
-            dists = euclidean(x, self.centroids)
-            centroid_idx = np.argmin(dists)
-            centroids.append(self.centroids[centroid_idx])
-            centroid_idxs.append(centroid_idx)
-        return centroids, centroid_idxs
-    
-class PPRClassifier:
-
-    def __init__(self, num_projections = 100, gamma=1.0, threshold=5.0):
-        self.num_projections = num_projections
-        self.gamma = gamma
-        self.threshold = threshold
-        self.projections = None
-
-    def rbf_kernel(self, X1, X2):
-        # Radial Basis Function (RBF) kernel
-        pairwise_sq_dists = np.sum(X1**2, axis=1, keepdims=True) + np.sum(X2**2, axis=1) - 2 * np.dot(X1, X2.T)
-        return np.exp(-self.gamma * pairwise_sq_dists)
-
-    def fit(self, X, y):
-        # Generate random projections
-        self.projections = np.random.normal(size=(X.shape[0], self.num_projections))
-
-        # Kernelize the data using RBF kernel
-        X_kernel = self.rbf_kernel(X, X)
-
-        # Ensure y is a 1D array
-        y = y.flatten()
-
-        # Initialize weights randomly
-        weights = np.random.normal(size=(X.shape[0], self.num_projections))
-
-        # Perform gradient ascent to optimize weights
-        for _ in tqdm(range(100)):
-            # Compute the projection pursuit function
-            projection_pursuit = X_kernel @ weights
-
-            # Update weights based on the derivative of the projection pursuit function
-            weights += 0.01 * (X_kernel.T @ (projection_pursuit - y[:, np.newaxis]))
-
-        self.weights = weights
-
-    def predict(self, X):
-        # Kernelize the test data
-        X_kernel = self.rbf_kernel(X, X)
-
-        # Compute the projection pursuit function for the test data
-        projection_pursuit = X_kernel @ self.weights[:X_kernel.shape[0],:]
-
-        # Classify based on a threshold
-        predictions = np.where(projection_pursuit > self.threshold, 1, -1)
-
-        return list(predictions)
-    
 class kNN:
 
     def __init__(self, collection, labels,k = 10):
@@ -2381,47 +2253,38 @@ class kNN:
         
         return classifications
     
-class CSRMatrix:
-    def __init__(self, values, row_ptr, col_indices, shape):
-        self.values = values
-        self.row_ptr = row_ptr
-        self.col_indices = col_indices
-        self.shape = shape
+def pagerank(adj_matrix, labels, personalization, teleport_prob=0.15, max_iter=100):
 
-def pagerank_csr(csr_matrix, teleport_prob=0.15, max_iter=100, tol=1e-6,personalization = None):
-    n = csr_matrix.shape[0]
-    num_nonzero = len(csr_matrix.values)
-
-    # Initialize PageRank scores
-    pagerank = np.ones(n) / n
+    #Initialize pagerank vector
+    pagerank = (1-teleport_prob)*np.dot(adj_matrix,personalization) + teleport_prob*(np.ones(adj_matrix.shape[0])/adj_matrix.shape[0])
+    pagerank/=np.sum(pagerank)
 
     for _ in tqdm(range(max_iter)):
-        pagerank_new = np.zeros(n)
 
-        for i in range(n):
-            start_idx = csr_matrix.row_ptr[i]
-            end_idx = csr_matrix.row_ptr[i + 1]
+        label_totals = {}
 
-            for j in range(start_idx, end_idx):
-                col_idx = csr_matrix.col_indices[j]
-                pagerank_new[col_idx] += (pagerank[i] * csr_matrix.values[j])
+        for index in range(adj_matrix.shape[0]):
+            if labels[index] in label_totals.keys():
+                label_totals[labels[index]]+=1
+            else:
+               label_totals[labels[index]]=1 
 
-        # Apply teleportation
-        pagerank_new = teleport_prob / n + (1 - teleport_prob) * pagerank_new
+        reseed = []
 
-        if personalization is not None:
-            pagerank_new+=personalization
+        for index in range(adj_matrix.shape[0]):
+            reseed.append(pagerank[index]/label_totals[labels[index]])
 
-        # Check for convergence
-        if np.linalg.norm(pagerank_new - pagerank, 1) < tol:
-            break
+        reseed = np.array(reseed)
+        reseed/=np.sum(reseed)
 
-        pagerank = pagerank_new
-    print()
+        #calculate PPR-G score
+        pagerank = (1-teleport_prob)*np.dot(adj_matrix,pagerank) + teleport_prob * reseed
+        pagerank/=np.sum(pagerank)
+
     return pagerank
 
 class PersonalizedPageRankClassifier:
-    def __init__(self, teleport_prob=0.15, max_iter=100, tol=1e-6):
+    def __init__(self, teleport_prob=0.15, max_iter=100, tol=1e-5):
         self.teleport_prob = teleport_prob
         self.max_iter = max_iter
         self.tol = tol
@@ -2431,40 +2294,28 @@ class PersonalizedPageRankClassifier:
         self.classes_ = np.unique(y_train)
         self.personalization = personalization
 
-        values = [val for row in X_train for val in row if val != 0]
-        row_ptr = [0] + np.cumsum(np.sum(X_train != 0, axis=1)).tolist()
-        col_indices = [col_idx for row in X_train for col_idx in np.where(row != 0)[0]]
-        shape = X_train.shape
-        csr_matrix = CSRMatrix(values, row_ptr, col_indices, shape)
-
         # Compute personalized PageRank for the entire training set
-        pagerank_vector = pagerank_csr(csr_matrix, teleport_prob=self.teleport_prob,
-                                    max_iter=self.max_iter, tol=self.tol, personalization=personalization)
+        pagerank_vector = pagerank(X_train, y_train, personalization, teleport_prob=self.teleport_prob, max_iter=self.max_iter)
         
-        total_score = sum(pagerank_vector)
-        normalized_scores = [score / total_score for score in pagerank_vector]
-
-        if personalization is not None:
-            normalized_scores+=personalization
-            total_score = sum(normalized_scores)
-            normalized_scores = [score / total_score for score in normalized_scores]
+        #pagerank_vector = pagerank_vector/np.sum(pagerank_vector)
         
         # Store the computed pagerank_vector
-        self.pagerank_vector = normalized_scores
+        self.pagerank_vector = pagerank_vector
 
         with st.expander("PageRank Values for Training Data"):
-            st.write(self.pagerank_vector)
+            st.write(list(self.pagerank_vector))
+        with st.expander("Pagerank Values Analysis"):
+            st.write("Min Value: "+str(np.min(self.pagerank_vector)))
+            st.write("Max Value: "+str(np.max(self.pagerank_vector)))
+            st.write("Mean Value: "+str(np.mean(self.pagerank_vector)))
 
     def predict(self, X_test, train_labels):
         predictions = []
 
-        for sample in X_test:
-            
-            sample_pagerank = sample * self.pagerank_vector
-
-            #print(sample_pagerank.shape)
-
-            predictions.append(train_labels[np.argmax(sample_pagerank)])
+        for idx in range(X_test.shape[0]):
+            pred_pagerank = (1-self.teleport_prob)*X_test[idx]*self.pagerank_vector + self.teleport_prob*X_test[idx]
+            pred_pagerank/=np.sum(pred_pagerank)
+            predictions.append(train_labels[np.argmax(pred_pagerank)])
 
         return predictions
     
@@ -2473,7 +2324,7 @@ class DecisionTree:
         self.max_depth = max_depth
         self.min_size = min_size
 
-    def fit(self, X, y, depth=0):
+    def fit(self, X, y, search_size = 10,depth=0):
         # Store training data and labels in the node
         self.X = X
         self.y = y
@@ -2486,7 +2337,7 @@ class DecisionTree:
             return
 
         # Find the best split
-        feature_index, threshold = self.find_best_split(X, y)
+        feature_index, threshold = self.find_best_split(X, y,search_size)
 
         # If no split is found, make it a leaf node
         if feature_index is None:
@@ -2496,10 +2347,10 @@ class DecisionTree:
         # Split the data and recursively build the tree
         mask = X[:, feature_index] <= threshold
         self.left = DecisionTree(self.max_depth, self.min_size)
-        self.left.fit(X[mask], y[mask], depth + 1)
+        self.left.fit(X[mask], y[mask], search_size=search_size,depth = depth + 1)
 
         self.right = DecisionTree(self.max_depth, self.min_size)
-        self.right.fit(X[~mask], y[~mask], depth + 1)
+        self.right.fit(X[~mask], y[~mask], search_size=search_size,depth = depth + 1)
 
         self.feature_index = feature_index
         self.threshold = threshold
@@ -2508,16 +2359,12 @@ class DecisionTree:
         # Check if the node should be a leaf based on hyperparameters
         return (self.max_depth is not None and depth == self.max_depth) or len(set(y)) == 1 or len(y) <= self.min_size
 
-    def find_best_split(self, X, y):
+    def find_best_split(self, X, y,search_size):
         # Find the best split based on Gini impurity
         best_gini = float('inf')
         best_feature_index = None
         best_threshold = None
 
-        if X.shape[1]>100:
-            search_size = 100
-        else:
-            search_size = X.shape[1]
         rand_indexes = np.random.choice(range(X.shape[1]),size = search_size, replace=False)
 
         for feature_index in tqdm(rand_indexes):
@@ -2569,8 +2416,32 @@ class DecisionTree:
     def predict(self, X):
         # Predict labels for multiple samples
         return [self.predict_single(sample) for sample in X]
+    
+    def save_model(self, filename):
+        # Save the decision tree model to a file using joblib
+        joblib.dump(self, filename)
+
+def load_model(filename):
+    # Load a saved decision tree model from a file using joblib
+    return joblib.load(filename)
                 
-def display_scores(confusion_matrix,true_labels,predictions):
+def display_scores(confusion_matrix,true_labels,predictions,acc=None):
+
+    with st.expander("Confusion Matrix for Classification"):
+        conf = pd.DataFrame(data=confusion_matrix, columns=[str(i) for i in range(0, confusion_matrix.shape[1])])
+        st.dataframe(conf,width = 200000)
+
+    table = {
+    'Image Index': list(range(1,8677,2)),
+    'True Labels': true_labels,
+    'Predicted Labels': predictions
+    }
+
+    # Create a DataFrame
+    table = pd.DataFrame(table)
+
+    with st.expander("Predicted Labels",expanded=False):
+        st.dataframe(table,width = 200000)
 
     labelwise_metrics = {}
     for idx in range(101):
@@ -2598,6 +2469,8 @@ def display_scores(confusion_matrix,true_labels,predictions):
             truecount+=1
  
     accuracy = truecount/len(predictions)
+    if acc!=None:
+        accuracy = acc
 
     st.write("Accuracy Scores:")
     st.write("Overall Accuracy: "+str(accuracy))
@@ -2605,13 +2478,13 @@ def display_scores(confusion_matrix,true_labels,predictions):
 
     with st.container():
         for idx in range(101):
-            with st.expander("Label "+str(idx),expanded = True):
+            with st.expander("Label "+str(idx),expanded = False):
                 st.write("Precision: "+str(labelwise_metrics[idx]['Precision']))
                 st.write("Recall: "+str(labelwise_metrics[idx]['Recall']))
                 st.write("F1-Score: "+str(labelwise_metrics[idx]['F1-Score']))
 
 
-def classifier(cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0,teleport_prob=0):
+def classifier(img_id,cltype,feature_collection,odd_feature_collection,similarity_collection,dataset,k=0,teleport_prob=0):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -2643,78 +2516,12 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         odd_data = scipy.io.loadmat(str(odd_desc_path))
         odd_labels = odd_data['labels']
         odd_layer3_features = odd_data['layer3_features']
-        
-    if cltype == "k-Means":
 
-        kmeans = KMeans(similarity_collection,n_clusters=k)
-        class_centers, classification = kmeans.fit(layer3_features)
-        centroid_dict = {}
-        centroid_label_vote = {}
-        centroid_label_mapping = {}
-
-        print(class_centers,classification)
-
-        print("Taking Label Vote")
-        for idx in tqdm(range(len(classification))):
-            cluster_id = int(classification[idx])
-
-            if cluster_id not in centroid_dict.keys():
-                centroid_dict[cluster_id] = class_centers[cluster_id]
-
-            label = np.where(labels[idx]==1)[0][0]
-
-            if cluster_id in centroid_label_vote.keys():
-                if label in centroid_label_vote[cluster_id]:
-                    centroid_label_vote[cluster_id][label]+=1
-                else:
-                    centroid_label_vote[cluster_id][label]=1
-            else:
-                centroid_label_vote[cluster_id] = {label: 1}
-        
-        for key in centroid_label_vote.keys():
-            centroid_label_mapping[key] = max(centroid_label_vote[key],key = centroid_label_vote[key].get)
-
-        centroid_label_mapping = {key:value for key, value in sorted(centroid_label_mapping.items(), key=lambda item: int(item[0]))}
-        print("Centroid to label mapping:")
-        print(centroid_label_mapping)
-
-        st.write("Clusters assigned to labels:")
-        st.write(list(centroid_label_mapping.values()))
-
-        print("Even features")
-        print(type(layer3_features),layer3_features.shape)
-
-        print("Odd features")
-        print(type(odd_layer3_features),odd_layer3_features.shape)
-
-        odd_class_centers,odd_classification = kmeans.evaluate(odd_layer3_features)
-
-        true_labels = []
-        
-        for idx in range(len(odd_labels)):
-            true_labels.append(np.where(odd_labels[idx]==1)[0][0])
-
-        predictions = []
-
-        confusion_matrix = np.zeros((101,101))
-        print(confusion_matrix.shape)
-
-        for idx in range(len(odd_classification)):
-            c = int(odd_classification[idx])
-            predictions.append(centroid_label_mapping[int(c)])
-
-            l = int(true_labels[idx])
-            confusion_matrix[l][centroid_label_mapping[int(c)]]+=1
-
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
-
-        display_scores(confusion_matrix,true_labels,predictions)
-
-    elif cltype == "Decision Tree":
+    if cltype == "Decision Tree":
 
         max_depth = 10
-        min_size = 30
+        min_size = 25
+        search_size = 25
 
         tree = DecisionTree(max_depth=max_depth,min_size=min_size)
 
@@ -2725,8 +2532,14 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
 
         scaler = StandardScaler()
         layer3_features_scaled = scaler.fit_transform(layer3_features)
+        treepath = mod_path.joinpath("Classifiers","DecisionTree",str(max_depth)+"_"+str(min_size)+"_"+str(search_size)+".joblib")
 
-        tree.fit(layer3_features_scaled,np.array(even_labels))
+        if os.path.exists(treepath):
+            tree = load_model(treepath)
+
+        else:
+            tree.fit(layer3_features_scaled,np.array(even_labels),search_size)
+            tree.save_model(treepath)
 
         true_labels = []
         
@@ -2744,8 +2557,23 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
+        if img_id%2==0:
+
+            document = feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text ="Query input not an odd index"
+        
+        else:
+
+            document = odd_feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text = "Query Image Tagged to Label "+str(predictions[img_id//2])+" "+get_class_name(predictions[img_id//2])
+
+        with st.expander("Query Image and Label"):
+
+            display_image_centered(np.array(image),str(img_id))
+
+            st.markdown(markdown_text)
 
         display_scores(confusion_matrix,true_labels,predictions)
 
@@ -2773,8 +2601,23 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
+        if img_id%2==0:
+
+            document = feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text ="Query input not an odd index"
+        
+        else:
+
+            document = odd_feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text = "Query Image Tagged to Label "+str(predictions[img_id//2])+" "+get_class_name(predictions[img_id//2])
+
+        with st.expander("Query Image and Label"):
+
+            display_image_centered(np.array(image),str(img_id))
+
+            st.markdown(markdown_text)
 
         display_scores(confusion_matrix,true_labels,predictions)
 
@@ -2785,70 +2628,105 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
         for idx in range(len(labels)):
             even_labels.append(np.where(labels[idx]==1)[0][0])
 
+        print("Using Teleport Prob"+str(teleport_prob))
         ppr = PersonalizedPageRankClassifier(teleport_prob=teleport_prob)
 
         adj_matrix = []
 
         personalization = []
+        label_totals = {}
 
-        print("Building Adjacency Matrix")
-        for idx in tqdm(range(0,8677,2)):
+        adj_matfile_path = str(mod_path.joinpath("Classifiers","PPR","Pagerank_Adjacencies"+str(teleport_prob)+".mat"))
 
-            scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+        if os.path.exists(adj_matfile_path):
 
-            even_scores = {}
-            total_score = 0
-            for imgid in scores.keys():
-                if int(imgid)%2 == 0:
-                    even_scores[int(imgid)] = scores[imgid]
-                    total_score+=scores[imgid]
+            ppr_data = scipy.io.loadmat(adj_matfile_path)
 
-            personalization.append(total_score/4339)
+            adj_matrix = ppr_data['adj_matrix']
 
-            #print("Scores present for "+str(len(scores.keys()))+" images")
+            odd_adj_matrix = ppr_data['odd_adj_matrix']
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
+            odd_labels = ppr_data['odd_labels']
 
-            top_k_even_indices = list(even_scores.keys())
+            ppr.pagerank_vector = ppr_data['pagerank']
 
-            row = np.zeros(4339)
+        else:
 
-            for indice in top_k_even_indices:
-                row[int(indice/2)] = 1
+            print("Building Adjacency Matrix")
+            for idx in tqdm(range(0,8677,2)):
 
-            adj_matrix.append(row)
+                scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
 
-        adj_matrix = np.array(adj_matrix)
-        even_labels = np.array(even_labels)
-        print("Adjacency Matrix: "+str(adj_matrix.shape)+" Labels: "+str(even_labels.shape))
+                label = even_labels[int(idx/2)]
+                even_scores = {}
+                label_total = 0
+                label_count = 0
+                
+                for imgid in scores.keys():
+                    if int(imgid)%2 == 0:
+                        even_scores[int(imgid)] = scores[imgid]
+                        if even_labels[int(int(imgid)/2)] == label:
+                            label_total += scores[imgid]
+                            label_count += 1
 
-        ppr.fit(adj_matrix,even_labels,personalization=np.array(personalization))
+                personalization.append(label_total/label_count)
 
-        odd_adj_matrix = []
+                if label in label_totals.keys():
+                    label_totals[label]+=label_total/label_count
+                else:
+                    label_totals[label]=label_total/label_count
 
-        print("Building Adjacency Matrix")
-        for idx in tqdm(range(1,8677,2)):
+                #print("Scores present for "+str(len(scores.keys()))+" images")
 
-            scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+                even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
 
-            even_scores = {}
+                top_k_even_indices = list(even_scores.keys())
 
-            for imgid in scores.keys():
-                if int(imgid)%2 == 0:
-                    even_scores[int(imgid)] = scores[imgid]
+                row = np.zeros(4339)
 
-            #print("Scores present for "+str(len(scores.keys()))+" images")
+                for indice in top_k_even_indices:
+                    row[int(indice/2)] = 1
 
-            even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-5:])
+                adj_matrix.append(row)
 
-            top_k_even_indices = list(even_scores.keys())
+            for idx in range(len(personalization)):
+                personalization[idx]/=label_totals[even_labels[idx]]
 
-            row = np.zeros(4339)
+            adj_matrix = np.array(adj_matrix)
+            even_labels = np.array(even_labels)
+            print("Adjacency Matrix: "+str(adj_matrix.shape)+" Labels: "+str(even_labels.shape))
 
-            for indice in top_k_even_indices:
-                row[int(indice/2)] = 1
+            ppr.fit(adj_matrix,even_labels,personalization=personalization)
 
-            odd_adj_matrix.append(row)
+            odd_adj_matrix = []
+
+            print("Building Adjacency Matrix")
+            for idx in tqdm(range(1,8677,2)):
+
+                scores = similarity_collection.find_one({'_id':idx})['avgpool_descriptor']
+
+                even_scores = {}
+
+                for imgid in scores.keys():
+                    if int(imgid)%2 == 0:
+                        even_scores[int(imgid)] = scores[imgid]
+
+                #print("Scores present for "+str(len(scores.keys()))+" images")
+
+                even_scores = dict(sorted(even_scores.items(), key = lambda x: x[1])[-10:])
+
+                top_k_even_indices = list(even_scores.keys())
+
+                row = np.zeros(4339)
+
+                for indice in top_k_even_indices:
+                    row[int(indice/2)] = 1
+
+                odd_adj_matrix.append(row)
+
+            odd_adj_matrix = np.array(odd_adj_matrix)
+
+            scipy.io.savemat(adj_matfile_path, {'adj_matrix': adj_matrix, 'odd_adj_matrix': odd_adj_matrix, 'even_labels':even_labels, 'odd_labels': odd_labels, 'pagerank': ppr.pagerank_vector})
 
         odd_adj_matrix = np.array(odd_adj_matrix)
 
@@ -2867,8 +2745,23 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
             c = predictions[idx]
             confusion_matrix[l][c]+=1
 
-        with st.expander("Confusion Matrix for Classification"):
-            st.write(confusion_matrix)
+        if img_id%2==0:
+
+            document = feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text ="Query input not an odd index"
+        
+        else:
+
+            document = odd_feature_collection.find_one({'_id':img_id})
+            image = np.array(document['image'], dtype=np.uint8)
+            markdown_text = "Query Image Tagged to Label "+str(predictions[img_id//2])+" "+get_class_name(predictions[img_id//2])
+
+        with st.expander("Query Image and Label"):
+
+            display_image_centered(np.array(image),str(img_id))
+
+            st.markdown(markdown_text)
 
         display_scores(confusion_matrix,true_labels,predictions)
 
@@ -2877,28 +2770,31 @@ def classifier(cltype,feature_collection,odd_feature_collection,similarity_colle
     
     
 def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_latent_semantics):
-    print('Enter calculate_label_from_semantic blbbl')
+    print('Enter calculate_label_from_semantic')
     output_labels=[]
     
    # Compute Distances for every row from the odd image latent semantics with every row (label) from the label weighted semantics (even images)
-    for idx in tqdm(range(0,odd_latent_semantics.shape[0])):
-        sim_scores=[]
-        for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
-            #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
-            sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+    # for idx in tqdm(range(0,odd_latent_semantics.shape[0])):
+    #     sim_scores=[]
+    #     for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
+    #         #sim_scores.append(euclidean_distance_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
+    #         sim_scores.append(cosine_similarity_calculator(odd_latent_semantics[idx],even_label_weighted_latent_semantics[cmpidx]))
 
-            #print(min(sim_scores),max(sim_scores))
-        output_labels.append(np.argmin(sim_scores))
+    #         #print(min(sim_scores),max(sim_scores))
+    #     output_labels.append(np.argmin(sim_scores))
         
     # even_label_weighted_latent_semantics_transpose = np.array(even_label_weighted_latent_semantics).T
 
-    # image_label_latent_semantic = np.dot(odd_latent_semantics,even_label_weighted_latent_semantics_transpose)
-    # print('Dot product complete')
-    # print(image_label_latent_semantic.shape)
-    # print(image_label_latent_semantic)
-    # for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
-    #     output_labels.append(np.argmin(image_label_latent_semantic[idx]))
-        
+    image_label_latent_semantic = np.dot(odd_latent_semantics,even_label_weighted_latent_semantics)
+    print('Dot product complete')
+    print(image_label_latent_semantic.shape)
+    #print(image_label_latent_semantic) # 4338,5
+    for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
+        scores=[]
+        for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
+            scores.append(cosine_similarity_calculator(image_label_latent_semantic[idx],even_label_weighted_latent_semantics[cmpidx]))
+        output_labels.append(np.argmax(scores))
+            
 
     print(output_labels)
     print('Exit calculate_label_from_semantic')
@@ -2913,7 +2809,7 @@ def generate_label_weighted_semantics(image_data,feature_space,k,feature_collect
 
     
     for label in tqdm(range(0,101)):
-        representation_image_index_by_label.append(similarity_calculator_by_label(label,feature_space,1,odd_feature_collection,feature_collection,similarity_collection,Caltech101)[0])
+        representation_image_index_by_label.append(similarity_calculator_by_label(label,feature_space,1,odd_feature_collection,feature_collection,similarity_collection,Caltech101))
 
     
     for idx in representation_image_index_by_label:
@@ -2921,25 +2817,46 @@ def generate_label_weighted_semantics(image_data,feature_space,k,feature_collect
     
     #print(required_resnet_features.shape)
 
-    label_weighted_latent_semantics = kmeans_decomposition(np.array(required_resnet_features),k)
+    label_weighted_latent_semantics, centroids = kmeans_decomposition(np.array(required_resnet_features),k)
     
-    return label_weighted_latent_semantics
-
+    return label_weighted_latent_semantics, centroids
         
 
 
+def get_image_label_latent_semantic(similarity_collection,data_odd,dataset):
+    odd_labels = data_odd['labels']
+    image_label_matrix=[]
+    
 
-def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection):
+    for i in tqdm(range(1,len(dataset),2)):
+        image_label_weights =[0]*101
+        label_wise_scores={}
+        similarity_scores = similarity_collection.find_one({'_id': i})
+        for j in range(1,len(dataset),2):
+            img_label = np.where(odd_labels[(int)(j/2)]==1)[0][0]
+            if img_label not in label_wise_scores:
+                label_wise_scores[img_label]=[]
+            label_wise_scores[img_label].append(similarity_scores['fc_softmax_descriptor'][str(j)])
+            for key in label_wise_scores.keys():
+                scores = label_wise_scores[key]
+                image_label_weights[key] = sum(scores)/len(scores)
+        image_label_matrix.append(image_label_weights)
+    
+    return np.array(image_label_matrix)
+
+
+
+def ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection,dataset):
     mod_path = Path(__file__).parent.parent
     ls_file_path = str(mod_path)+"/LatentSemantics/"
-    k=100
+    k=5
     try:
         data_even = scipy.io.loadmat(ls_file_path+'arrays.mat')
         data_odd  = scipy.io.loadmat(ls_file_path+'arrays_odd.mat')
 
         print('Descriptor Mat Files Loaded Successfully')
     except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
-        print("Exception in ls_even_by_label "+e)
+        print("Exception in ls_even_by_label "+str(e))
         store_by_feature(str(ls_file_path),feature_collection)
         store_by_feature_odd(str(ls_file_path),odd_feature_collection)
         data_even = scipy.io.loadmat(ls_file_path+'arrays.mat')
@@ -2948,20 +2865,22 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         #labels_even = data_even['labels']
         #labels_odd = data_odd['labels']
 
-   
-
     #Latent Semantic chosen is ResNet as Feature Model, K-Means as Dimensionality Reduction Technique and 'k' value as 5 for the even images in the dataset. 
     try:
-        pkl_file_path = ls_file_path+"Phase3_Even_Latent_Semantics_100.pkl"  #Change this file path after new pickle file has been created. 
+        pkl_file_path = ls_file_path+"latent_semantics_3_resnet_k-Means_5_output.pkl"  #Change this file path after new pickle file has been created. 
         with open(pkl_file_path,'rb') as file:
             print('File path is '+pkl_file_path)
-            even_label_weighted_latent_semantics = pickle.load(file)
+            _,even_label_weighted_latent_semantics = pickle.load(file)
             print('Even LS Pickle File Loaded')
-            
-    
+        # pkl_file_path = ls_file_path+"TASK5_fc_k5_kmeans.csv"  #Change this file path after new pickle file has been created. 
+        # print('File path is '+pkl_file_path)
+        # even_label_weighted_latent_semantics = pd.read_csv(pkl_file_path)
+
+        print('Even LS Pickle File Loaded')
+
     except (FileNotFoundError) as e:
-        even_label_weighted_latent_semantics = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
-        pickle.dump(even_label_weighted_latent_semantics, open(pkl_file_path, 'wb+'))
+        even_label_weighted_latent_semantics, centroids = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
+        pickle.dump((even_label_weighted_latent_semantics,centroids), open(pkl_file_path, 'wb+'))
         print('Pickle File Created : '+pkl_file_path)
     
     print(even_label_weighted_latent_semantics.shape)
@@ -2969,7 +2888,7 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
 
     #Calculate Latent Semantics for Odd Images
     try:
-        odd_ls_file_path = ls_file_path+"odd_latent_semantics_100.pkl"
+        odd_ls_file_path = ls_file_path+"odd_latent_semantics_"+str(k)+".pkl"
         with open(odd_ls_file_path,'rb') as file:
             print('File path is '+odd_ls_file_path)
             odd_latent_semantics = pickle.load(file)
@@ -2980,7 +2899,21 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
         print('Calculating Latent Semantics for Odd Images')
         odd_resnet_features = data_odd['resnet_features']
         print(odd_resnet_features.shape)
-        odd_latent_semantics = kmeans_decomposition(odd_resnet_features,k)
+        odd_latent_semantics = get_image_label_latent_semantic(similarity_collection,data_odd,dataset)
+        
+        """odd_latent_semantics = []
+        print("Calculating odd LS")
+        for idx in tqdm(range(odd_resnet_features.shape[0])):
+            feature = odd_resnet_features[idx]
+            semantic = []
+            for centroid in centroids:
+                semantic.append(euclidean_distance_calculator(feature,centroid))
+            odd_latent_semantics.append(semantic)
+
+        odd_latent_semantics = np.array(odd_latent_semantics)"""
+
+        #odd_latent_semantics = reduce_dimensionality(odd_resnet_features, k, "LDA")
+
         print('Odd Latent Semantics Calculated')
         print(odd_latent_semantics.shape)
         pickle.dump(odd_latent_semantics, open(odd_ls_file_path, 'wb+'))
@@ -3041,10 +2974,813 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
                 st.write("Recall: "+str(labelwise_metrics[idx]["Recall"]))
                 st.write("F1-Score: "+str(labelwise_metrics[idx]["F1-Score"]))
     
-    
-    
-    
+class LSH:
+    def __init__(self, num_layers, num_hashes, input_dim):
+        self.num_layers = num_layers
+        self.num_hashes = num_hashes
+        self.input_dim = input_dim
+        self.hash_tables = [{} for _ in range(num_layers)]
+        self.random_planes = [np.random.randn(num_hashes, input_dim) for _ in range(num_layers)]
 
+    def hash_vector(self, vector, planes):
+        return ''.join(['1' if np.dot(vector, plane) > 0 else '0' for plane in planes])
+
+    def index_vector(self, vector, index):
+        for i in range(self.num_layers):
+            hash_value = self.hash_vector(vector, self.random_planes[i])
+            hash_key = tuple(vector)  # Convert NumPy array to tuple
+            if hash_value not in self.hash_tables[i]:
+                self.hash_tables[i][hash_value] = []
+            self.hash_tables[i][hash_value].append((hash_key, index))
+
+    def index_vectors(self, vectors):
+        for i, vector in enumerate(vectors):
+            self.index_vector(vector, i)
+
+    def hash_query_vector(self, query_vector):
+        hashed_buckets = []
+        for i in range(self.num_layers):
+            hash_value = self.hash_vector(query_vector, self.random_planes[i])
+            if hash_value in self.hash_tables[i]:
+                bucket = self.hash_tables[i][hash_value]
+                hashed_buckets.append((i+1, hash_value, bucket))
+            else:
+                hashed_buckets.append((i+1, hash_value, []))
+        return hashed_buckets
+
+    def calculate_distances(self, query_vector, hashed_buckets):
+        distances = []
+        for layer, _, bucket in hashed_buckets:
+            layer_distances = []
+            for item in bucket:
+                vector = np.array(item[1])  # Retrieve the vector from the bucket
+                distance = np.linalg.norm(query_vector - vector)  # Calculate Euclidean distance
+                layer_distances.append((item[0], distance))  # Store index and distance
+            distances.append((layer, layer_distances))
+        return distances
+
+    def display_buckets(self, layer):
+        with st.expander("Layer "+str(layer)+" Buckets:"):
+            if layer <= 0 or layer > self.num_layers:
+                st.write("Layer index out of range.")
+                return
+
+            for key, value in sorted(self.hash_tables[layer - 1].items()):
+                st.write("Hash Value: "+str(key)+" Items: "+str(len(value)))
+                #for item in value:
+                #    st.write("Index: "+str(item[1])+", Vector: Shape:"+str(len(item[0]))+ " Min:"+str(np.min(item[0]))+" Max: "+str(np.max(item[0])))
+
+def lsh_calc(feature_collection,num_layers, num_hashes):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    try:
+        data_even = scipy.io.loadmat(even_desc_path)
+        
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+str(e))
+        store_by_feature(str(mat_file_path),feature_collection)
+        data_even = scipy.io.loadmat(even_desc_path)
+
+    feature_desc_array = data_even['avgpool_features']
+    labels = data_even['labels']
+    even_labels = []
+    image_ids = list(range(0,8677,2))
+            
+    for idx in range(len(labels)):
+        even_labels.append(np.where(labels[idx]==1)[0][0])  
+
+    lsh = LSH(num_layers, num_hashes, feature_desc_array.shape[1])
+    lsh.index_vectors(feature_desc_array)
+
+    lsh_path = str(mod_path.joinpath("LatentSemantics","lsh_"+str(num_layers)+"_"+str(num_hashes)+".pkl"))
+
+    if os.path.exists(lsh_path):
+        with open(lsh_path,'rb') as file:
+            lsh = pickle.load(file)
+    else:
+        pickle.dump(lsh,open(lsh_path, 'wb+'))
+
+    return lsh
+
+def lsh_search(feature_collection,odd_feature_collection,lsh,query_image,t):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    try:
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+        
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+str(e))
+        store_by_feature(str(mat_file_path),feature_collection)
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+
+    #lsh = lsh_calc(feature_collection,num_layers, num_hashes)
+
+    if query_image%2==0:
+        query = data_even['avgpool_features'][query_image//2]
+    else:
+        query = data_odd['avgpool_features'][query_image//2]
+
+    hashed_buckets = lsh.hash_query_vector(query)
+
+    unique_indices = set()
+    hash_values = {}
+
+    for layer, hash_value, bucket in hashed_buckets:
+        for item in bucket:
+            unique_indices.add(item[1]*2)  # Collecting unique indices
+            hash_values[item[1]*2] = hash_value
+
+    with st.expander("Unique Vector Indices:"):
+        st.write("Number of Unique Indices considered:"+str(len(unique_indices)))
+        st.write(unique_indices)
+
+    distances = []  # To store calculated distances
+    for _, _, bucket in hashed_buckets:
+        for item in bucket:
+            vector = np.array(item[0])  # Retrieve the vector from the bucket
+            distance = np.linalg.norm(query - vector)  # Calculate Euclidean distance
+            if (item[1],distance) not in distances:
+                distances.append((item[1], distance))  # Store index and distance
+
+    # Sort distances and retrieve k indices with smallest distances
+    nearest_indices = [index*2 for index, _ in nsmallest(t, distances, key=lambda x: x[1])]
+
+    if query_image%2==0:
+
+        document = feature_collection.find_one({'_id':query_image})
+
+    else:
+
+        document = odd_feature_collection.find_one({'_id':query_image})
+
+    image = np.array(document['image'], dtype=np.uint8)
+
+    display_image_centered(np.array(image),str(query_image))
+
+    show_ksimilar_list(nearest_indices,feature_collection,"")
+
+    return nearest_indices, unique_indices, lsh, distances, hash_values
+
+class LinearSVC:
+    def __init__(self, C=1.0):
+        self.C = C
+        self.models = {}  # Dictionary to store models for each class
+
+    def fit(self, X_train, y_train):
+        unique_classes = np.unique(y_train)
+
+        for class_label in unique_classes:
+            binary_labels = np.where(y_train == class_label, 1, -1)
+
+            m, n = X_train.shape
+            P = matrix(np.outer(binary_labels, binary_labels) * np.dot(X_train, X_train.T))
+            q = matrix(-np.ones(m))
+            G = matrix(np.vstack([-np.eye(m), np.eye(m)]))
+            h = matrix(np.hstack([np.zeros(m), np.ones(m) * self.C]))
+            A = matrix(binary_labels.reshape(1, -1),(1,m),'d')
+            b = matrix(0.0)
+
+            # Solve the quadratic optimization problem using CVXOPT
+            solution = solvers.qp(P, q, G, h, A, b)
+
+            # Extract Lagrange multipliers from the solution
+            alpha = np.array(solution['x']).flatten()
+
+            # Find support vectors
+            support_vector_indices = (alpha > 1e-5)
+            support_vectors = X_train[support_vector_indices]
+            support_vector_labels = binary_labels[support_vector_indices]
+            support_vector_alpha = alpha[support_vector_indices]
+
+            # Save the model for the class
+            self.models[class_label] = {
+                'support_vectors': support_vectors,
+                'support_vector_labels': support_vector_labels,
+                'support_vector_alpha': support_vector_alpha
+            }
+
+    def predict(self, X_test):
+        per_class_predictions = []
+
+        for class_label, model in self.models.items():
+            support_vectors = model['support_vectors']
+            support_vector_labels = model['support_vector_labels']
+            support_vector_alpha = model['support_vector_alpha']
+
+            decision_function = np.dot(X_test, support_vectors.T)
+            decision_function = np.sum(decision_function * support_vector_alpha * support_vector_labels, axis=1)
+
+            per_class_predictions.append((class_label, decision_function))
+
+        predictions = []
+
+        #print(per_class_predictions[0][1].shape)
+        for index in range(per_class_predictions[0][1].shape[0]):
+
+            pred_vals = []
+
+            for c in range(0,4):
+                pred_vals.append(per_class_predictions[c][1][index])
+            
+            predictions.append(np.argmax(pred_vals))
+
+        #st.write(predictions)
+
+        return predictions
+    
+def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection):
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    try:
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+        
+        print('Descriptor Mat Files Loaded Successfully')
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+        print("Exception in ls_even_by_label "+str(e))
+        store_by_feature(str(mat_file_path),feature_collection)
+        data_even = scipy.io.loadmat(even_desc_path)
+        data_odd = scipy.io.loadmat(odd_desc_path)
+
+    X_train = []
+    y_train = []
+    X_test = []
+    test_indices = {}
+
+    for index in feedback.keys():
+        X_train.append(data_even['avgpool_features'][index//2])
+        y_train.append(feedback[index])
+
+    #st.write(X_train)
+    #st.write(y_train)
+
+    for index in sorted(unique_indices):
+        if index not in feedback.keys():
+            X_test.append(data_even['avgpool_features'][index//2])
+            test_indices[len(X_test)-1] = index
+    
+    if option == "SVM":
+
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
+
+        # Create an SVM classifier with a linear kernel
+        #svm_classifier = SVC(kernel='linear', C=0.01)
+        svm_classifier = LinearSVC(C=0.00005)
+
+        # Train the classifier on the training data
+        svm_classifier.fit(X_train, y_train)
+
+        y_train_pred = list(svm_classifier.predict(X_train))
+
+        print("Train Accuracy: "+str(sum(1 for true, pred in zip(y_train, y_train_pred) if true == pred)/len(y_train)))
+
+        # Make predictions on the test data
+        y_pred = list(svm_classifier.predict(X_test))
+
+        #df = pd.DataFrame({'Image ID': test_indices,'Relevance':y_pred})
+        #st.dataframe(df)
+
+        if query_image%2==0:
+
+            document = feature_collection.find_one({'_id':query_image})
+
+        else:
+
+            document = odd_feature_collection.find_one({'_id':query_image})
+
+        image = np.array(document['image'], dtype=np.uint8)
+
+        fetchedarray = document['avgpool_descriptor']
+                    
+        avgpoolarray = [0 if pd.isna(x) else x for x in fetchedarray]
+
+        avgpoolarray = np.array(avgpoolarray)
+
+        display_image_centered(np.array(image),str(query_image))
+
+        nearest_indices = []
+        for index in feedback.keys():
+            if feedback[index] == 3:
+                if len(nearest_indices)<10:
+                            nearest_indices.append(index)
+
+        print(str(len(nearest_indices))+" Taken from feedback")
+
+        relevant_indices = {}
+
+        reorder_X_test = []
+
+        for index in range(X_test.shape[0]):
+            if y_pred[index] == 3:
+                relevant_indices[len(reorder_X_test)] = test_indices[index]
+                reorder_X_test.append(X_test[index])
+
+        reorder_X_test = np.array(reorder_X_test)
+
+        distances = [np.sqrt(np.sum((avgpoolarray - vector)**2)) for vector in reorder_X_test]
+
+        required_num = 10 - len(nearest_indices)
+        print("Required Num: "+str(required_num))
+        min_indices = np.argsort(distances)[:required_num]
+
+        for index in min_indices:
+
+            nearest_indices.append(relevant_indices[index])
+
+        print(str(len(nearest_indices))+" after score 3")
+
+        if len(nearest_indices)<10:
+
+            relevant_indices = {}
+
+            reorder_X_test = []
+
+            for index in range(X_test.shape[0]):
+                if y_pred[index] == 2:
+                    relevant_indices[len(reorder_X_test)] = test_indices[index]
+                    reorder_X_test.append(X_test[index])
+
+            reorder_X_test = np.array(reorder_X_test)
+
+            distances = [np.sqrt(np.sum((avgpoolarray - vector)**2)) for vector in reorder_X_test]
+
+            for index in feedback.keys():
+                if feedback[index] == 2:
+                    if len(nearest_indices)<10:
+                                nearest_indices.append(index)
+
+            required_num = 10 - len(nearest_indices)
+            print("Required Num: "+str(required_num))
+            min_indices = np.argsort(distances)[:required_num]
+
+            for index in min_indices:
+
+                nearest_indices.append(relevant_indices[index])
+
+            print(str(len(nearest_indices))+" after score 2")
+
+            if len(nearest_indices)<10:
+
+                relevant_indices = {}
+
+                reorder_X_test = []
+
+                for index in range(X_test.shape[0]):
+                    if y_pred[index] == 1:
+                        relevant_indices[len(reorder_X_test)] = test_indices[index]
+                        reorder_X_test.append(X_test[index])
+
+                reorder_X_test = np.array(reorder_X_test)
+
+                distances = [np.sqrt(np.sum((avgpoolarray - vector)**2)) for vector in reorder_X_test]
+
+                for index in feedback.keys():
+                    if len(nearest_indices)<10:
+                                if len(nearest_indices)<10:
+                                    nearest_indices.append(index)
+
+                required_num = 10 - len(nearest_indices)
+                print("Required Num: "+str(required_num))
+                min_indices = np.argsort(distances)[:required_num]
+
+                for index in min_indices:
+
+                    nearest_indices.append(relevant_indices[index])
+
+                print(str(len(nearest_indices))+" after score 1")
+
+                if len(nearest_indices)<10:
+
+                    relevant_indices = {}
+
+                    reorder_X_test = []
+
+                    for index in range(X_test.shape[0]):
+                        if y_pred[index] == 0:
+                            relevant_indices[len(reorder_X_test)] = test_indices[index]
+                            reorder_X_test.append(X_test[index])
+
+                    reorder_X_test = np.array(reorder_X_test)
+
+                    distances = [np.sqrt(np.sum((avgpoolarray - vector)**2)) for vector in reorder_X_test]
+
+                    for index in feedback.keys():
+                        if feedback[index] == 0:
+                            if len(nearest_indices)<10:
+                                nearest_indices.append(index)
+
+                    required_num = 10 - len(nearest_indices)
+                    print("Required Num: "+str(required_num))
+                    min_indices = np.argsort(distances)[:required_num]
+
+                    for index in min_indices:
+
+                        nearest_indices.append(relevant_indices[index])
+
+                    print(str(len(nearest_indices))+" after score 0")
+
+        #st.write(nearest_indices)
+
+        st.markdown("Updated Results based on Feedback")
+
+        show_ksimilar_list(nearest_indices,feature_collection,"")
+    
+    else:
+
+        y_train = [y/3 for y in y_train]
+
+        #st.write(y_train)
+
+        st.markdown("Updated Results based on Feedback")
+
+        y_test = []
+
+        for row_index in tqdm(range(len(X_test))):
+
+            sim_scores = []
+
+            index = test_indices[row_index]
+
+            train_indices = []
+
+            for feedback_index in feedback.keys():
+
+                sim_scores.append(similarity_collection.find_one({'_id':feedback_index})["avgpool_descriptor"][str(index)])
+                train_indices.append(feedback_index)
+
+            #print("Row Index: "+str(row_index)+" Sim Scores: "+str(sim_scores))
+
+            for idx in range(len(y_train)):  
+                sim_scores[idx] *= y_train[idx]
+
+            #print("Prob Values: "+str(sim_scores))
+
+            prob_value = np.max(sim_scores)
+
+            y_test.append(prob_value)
+
+        nearest_indices = []
+        for feedback_index in feedback.keys():
+            if feedback[feedback_index]/3 == 1:
+                nearest_indices.append(feedback_index)
+
+        req = 10 - len(nearest_indices)
+
+        best_indices = np.argsort(y_test)[-req:][::-1]
+
+        for indice in best_indices:
+            nearest_indices.append(test_indices[indice])
+
+        show_ksimilar_list(nearest_indices,feature_collection,"")
+
+class DBScan:
+    def __init__(self, eps, min_samples):
+        self.eps = eps
+        self.min_samples = min_samples
+        self.labels = None
+
+    def fit_predict(self, X):
+        print("Fitting Dbscan Model!")
+        self.labels = np.full(X.shape[0], -1)  # Initialize labels as unassigned (-1)
+        cluster_label = 0
+
+        for i in tqdm(range(X.shape[0])):
+            if self.labels[i] != -1:
+                continue  # Skip points already assigned to a cluster
+
+            neighbors = self.find_neighbors(X, i)
+
+            if len(neighbors) < self.min_samples:
+                self.labels[i] = 0  # Label as noise
+            else:
+                cluster_label += 1
+                self.expand_cluster(X, i, neighbors, cluster_label)
+
+        return self.labels
+
+    def find_neighbors(self, X, center_idx):
+        neighbors = []
+        for i in range(X.shape[0]):
+            if np.linalg.norm(X[center_idx] - X[i]) < self.eps:
+                neighbors.append(i)
+        return neighbors
+
+    def expand_cluster(self, X, center_idx, neighbors, cluster_label):
+        self.labels[center_idx] = cluster_label
+
+        for neighbor in neighbors:
+            if self.labels[neighbor] == -1:
+                self.labels[neighbor] = cluster_label
+                new_neighbors = self.find_neighbors(X, neighbor)
+
+                if len(new_neighbors) >= self.min_samples:
+                    neighbors.extend(new_neighbors)   
+
+
+def calculate_distances(X):
+    print("\n#IN CALCULATE DISTANCE")
+    num_records = len(X)
+    
+    euclidean_distances = pairwise_distances(X)
+    print("Shape of distance matrix: ", euclidean_distances.shape)
+    print("Type of distance matrix: ", type(euclidean_distances))
+    
+    for i in range(num_records):
+        if(i%100==0):
+            print("Length euclidean_distances[",i,"]: ", len(euclidean_distances[i]))
+            print("Average distance of sample ",i, " against other samples: ", sum(euclidean_distances[i])/num_records)
+    average_distances = []
+    
+    cos_sim = cosine_similarity(X)
+    
+    for i in range(num_records):
+        average_distances.append(sum(euclidean_distances[i])/num_records)
+    
+    return np.array(sum(average_distances)/num_records), euclidean_distances
+
+def perform_mds(X):
+    st.write("Started MDS")
+
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = str(mod_path.joinpath("Classifiers","DBScan","mds.mat"))
+
+    if((os.path.exists(mat_file_path))==False):
+        print("Inside mds if")
+        embedding = MDS(n_components=2, normalized_stress='auto')
+        X_mds = embedding.fit_transform(X)
+        st.write("Transformed X shape:", X_mds.shape)
+        savedict = {
+            'X_mds' : X_mds
+        }
+        scipy.io.savemat(mat_file_path, savedict)
+    
+    mds_data = scipy.io.loadmat(mat_file_path)
+    X_mds = mds_data['X_mds']
+    X_mds = np.array(X_mds)
+
+    return X_mds
+
+def preprocess_dbscan(images_resnet):
+    scaler = MinMaxScaler()
+    images = scaler.fit_transform(np.array(images_resnet))
+    images = normalize(images, norm='l2')
+
+    return images
+
+def set_dbscan_params(n_clusters_):
+    if(n_clusters_==5):
+        epsilon = 0.8
+        min_samples = 16
+
+    else:
+        epsilon = 0.7
+        min_samples = 24
+
+    return epsilon, min_samples
+
+def get_dbscan_cluster_details(n_clusters_, n_noise_, labels):
+    clusters = []
+
+    print("Estimated number of clusters: %d" % n_clusters_)
+    print("Estimated number of noise points: %d" % n_noise_)
+
+    print("No. of instances in each label: ")
+
+    for i in range(n_clusters_+1):
+        clusters.append(2*np.where(labels==i)[0])
+        print("Length of Cluster", i, ": ",len(clusters[i]))
+        print("Cluster",i,":\n")
+        n = list(labels).count(i)
+
+    return clusters
+
+def plot_dbscan_clusters(labels, unique_labels, images_MDS):
+    colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_labels)))
+
+    plt.figure(figsize=(8, 8))
+
+    for label, color in zip(unique_labels, colors):
+        cluster_points = images_MDS[labels == label]
+        plt.scatter(cluster_points[:, 0], cluster_points[:, 1], c=[color], cmap=ListedColormap(colors), label=f'Cluster {label}', s=4)
+
+    plt.legend()
+    st.set_option('deprecation.showPyplotGlobalUse', False)
+    st.pyplot(plt.show())
+
+def plot_image_clusters(clusters, feature_collection):
+    for i in range(0,len(clusters)):
+        size = 20
+        if(len(clusters[i])<20):
+            size = len(clusters[i])
+        cluster = np.random.choice(clusters[i], size=size, replace=False)
+        st.write("CLUSTER", i)
+        show_ksimilar_list(cluster,feature_collection,"")
+
+def dbscan_predict(feature_collection, odd_feature_collection, caltech101, images, true_labels, clusters, n_clusters_):
+    even_images_resnet, even_true_labels, odd_images_resnet, odd_true_labels = get_data(feature_collection, odd_feature_collection)
+
+    odd_images = preprocess_dbscan(odd_images_resnet)
+
+    odd_predicted_labels = []
+
+    build = []
+
+    for i in range(n_clusters_+1):
+        cluster = []
+        for k in clusters[i]:
+            cluster.append(images[int(k/2)])
+        build.append(cluster)
+        cluster = np.array(cluster)
+
+    count = 0
+    
+    for idx in range(1, len(caltech101), 2):
+        euclidean_distances = []
+        odd_image = odd_images[int(idx/2)].reshape(1, -1)
+    
+        for i in range(len(clusters)):
+            cluster = np.array(build[i])
+            euclidean_distances.append(np.mean(pairwise_distances(odd_image, cluster)[0]))
+        
+        assigned_cluster_number = euclidean_distances.index(min(euclidean_distances)) 
+    
+        if((idx-1)%200==0):
+            print("Assigned cluster for image: ", idx, "is ", assigned_cluster_number)
+    
+        most_similar_images = np.array(build[assigned_cluster_number])
+    
+        y = []
+        for i in clusters[assigned_cluster_number]:
+            y.append(true_labels[int(i/2)])
+        
+        y = np.array(y)
+    
+    
+        neigh = KNeighborsClassifier(n_neighbors=5)
+        neigh.fit(most_similar_images, y)
+    
+        prediction = neigh.predict(odd_image)
+        odd_predicted_labels.append(prediction)
+
+    
+        if(odd_predicted_labels[int(idx/2)]==odd_true_labels[int(idx/2)]):
+            count = count + 1
+    
+    accuracy = count/4388
+    return np.round(accuracy*100, 2), odd_predicted_labels
+
+def get_data(feature_collection, odd_feature_collection):
+    mod_path = Path(__file__).parent.parent
+    mat_file_path = mod_path.joinpath("LatentSemantics","")
+    mat_file_path = str(f'{mat_file_path}{os.sep}')
+    even_desc_path = mod_path.joinpath("LatentSemantics","arrays.mat")
+    odd_desc_path = mod_path.joinpath("LatentSemantics","arrays_odd.mat")
+
+    print("Mat file path:", mat_file_path, "Even mat file path: ", even_desc_path, "Odd mat file path: ", odd_desc_path)
+
+    try:
+
+        even_data = scipy.io.loadmat(str(even_desc_path))
+        even_labels = even_data['labels']
+        even_fc_features = np.array(even_data['fc_features'], dtype=np.uint8)
+
+        odd_data = scipy.io.loadmat(str(odd_desc_path))
+        odd_labels = odd_data['labels']
+        odd_fc_features = np.array(odd_data['fc_features'], dtype=np.uint8)
+
+        even_true_labels = []
+        odd_true_labels = []
+
+        for idx in range(len(even_labels)):
+            even_true_labels.append(np.where(even_labels[idx]==1)[0][0])
+
+        even_true_labels = [data[x] for x in np.array(even_true_labels).tolist()]
+        
+        
+        for idx in range(len(odd_labels)):
+            odd_true_labels.append(np.where(odd_labels[idx]==1)[0][0])
+        
+        odd_true_labels = [data[x] for x in np.array(odd_true_labels).tolist()]
+
+    except (scipy.io.matlab.miobase.MatReadError, FileNotFoundError) as e:
+
+        store_by_feature(str(mat_file_path),feature_collection)
+        store_by_feature_odd(str(mat_file_path),odd_feature_collection)
+
+        even_data = scipy.io.loadmat(str(even_desc_path))
+        even_labels = even_data['labels']
+        even_fc_features = even_data['fc_features']
+
+        odd_data = scipy.io.loadmat(str(odd_desc_path))
+        odd_labels = odd_data['labels']
+        odd_fc_features = odd_data['fc_features']
+
+    return even_fc_features, even_true_labels, odd_fc_features, odd_true_labels
+
+def model_dbscan(caltech101, feature_collection, odd_feature_collection, data, n_clusters_ = 5):
+    even_images_resnet, even_true_labels, odd_images_resnet, odd_true_labels = get_data(feature_collection, odd_feature_collection)
+
+    print("Even images shape: ", even_images_resnet.shape)
+    print("Odd images shape: ", odd_images_resnet.shape)
+    print("Even data type: ", type(even_images_resnet))
+    print("Odd data type: ", type(odd_images_resnet))
+    print("Even labels shape: ", type(even_true_labels), len(even_true_labels))
+    print("Odd labels shape: ", type(odd_true_labels), len(odd_true_labels))
+
+    # print(even_true_labels[:500])
+    # print(odd_true_labels[:500])
+
+    # labels_arr = np.array(even_true_labels)
+    # unique, counts = np.unique(labels_arr, return_counts=True)
+
+    # labels_arr = np.asarray((unique, counts)).T
+    # print(labels_arr)
+
+    mod_path = Path(__file__).parent.parent
+    pkl_file_path = str(mod_path.joinpath("Classifiers","DBScan","odd_predicted_labels"+str(n_clusters_)+".pkl"))
+
+    if os.path.exists(pkl_file_path):
+
+        accuracy, odd_predicted_labels, labels, unique_labels, images_MDS, clusters = load_pickle_file(pkl_file_path)
+
+    else:
+
+        images = preprocess_dbscan(even_images_resnet)
+        print("Pre-Processing done")
+        epsilon, min_samples = set_dbscan_params(n_clusters_)
+        st.write("DBScan parameters:\nEpsilon = ", epsilon, "\nMin samples = ", min_samples)
+
+        dbscan = DBScan(epsilon, min_samples)
+        labels = dbscan.fit_predict(images)
+        print("Finished fitting DBscan model!")
+        unique_labels = np.unique(labels)
+        n_noise_ = list(labels).count(0)
+
+        clusters = get_dbscan_cluster_details(n_clusters_, n_noise_, labels)
+
+        images_MDS = perform_mds(images)
+
+        print(type(images_MDS))
+
+        accuracy, odd_predicted_labels = dbscan_predict(feature_collection, odd_feature_collection, caltech101, images, even_true_labels, clusters, n_clusters_)
+
+        pickle.dump((accuracy, odd_predicted_labels, labels, unique_labels, images_MDS, clusters), open(pkl_file_path, 'wb+'))
+        
+    st.write("Clusters Visualised on a 2-Dimensional MDS Space")
+    plot_dbscan_clusters(labels, unique_labels, images_MDS)
+
+    st.write("Images Visualised as Clusters")
+    plot_image_clusters(clusters, feature_collection)
+
+    otl = odd_true_labels
+    opl = odd_predicted_labels
+
+    confusion_matrix = np.zeros((101,101))
+    odd_predicted_labels = np.array(odd_predicted_labels)
+
+    for i in range(len(odd_predicted_labels)):
+        for k, v in data.items():  
+            if v == odd_predicted_labels[i]:
+                odd_predicted_labels[i] = k
+
+    for i in range(len(odd_true_labels)):
+        for k, v in data.items():  
+            if v == odd_true_labels[i]:
+                odd_true_labels[i] = k
+
+    for idx in range(len(odd_true_labels)):
+
+        l = int(odd_true_labels[idx])
+        c = int(odd_predicted_labels[idx])
+        confusion_matrix[l][c]+=1
+
+    with st.expander("Confusion Matrix for Classification"):
+        st.write(confusion_matrix)
+
+    display_scores(confusion_matrix,otl,opl,accuracy)
+
+        
 dataset_size = 8677
 dataset_mean_values = [0.5021372281891864, 0.5287581550675707, 0.5458470856851454]
 dataset_std_dev_values = [0.24773670511666424, 0.24607509728422117, 0.24912913964278197]

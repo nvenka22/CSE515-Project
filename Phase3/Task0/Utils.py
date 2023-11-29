@@ -1,17 +1,16 @@
 import numpy as np
-import math
 import scipy
 import os
 import pandas as pd
-
-from distance_utils import *
+from pathlib import Path
+from Task0.distance_utils import *
 from tqdm import tqdm
 from scipy.io import savemat, loadmat
 import warnings
 warnings.filterwarnings("ignore")
 
-
-ROOT_DIR = "/Users/prashantgaurav/ASU/Sem 1/mwdb/CSE515-Project"
+mod_path = Path(__file__).parent.parent
+ROOT_DIR = str(mod_path.parent)
 FEATURES = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features']
 data = scipy.io.loadmat(ROOT_DIR+'/Store/arrays.mat')
 latent_space_features = dict()
@@ -72,7 +71,7 @@ def get_inherent_dim_even():
     best_feature = get_best_feature_even(df_stress)
 
     inherent_dim = loadmat(os.path.join(ROOT_DIR, "Store/latent_dim.mat"))
-    return inherent_dim[best_feature], best_feature 
+    return inherent_dim[best_feature], best_feature
     
 def get_labelled_features():
     """
