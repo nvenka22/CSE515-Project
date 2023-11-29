@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 mod_path = Path(__file__).parent.parent
-ROOT_DIR = str(mod_path.parent)
+ROOT_DIR = str(mod_path)
 FEATURES = ['cm_features', 'hog_features', 'avgpool_features', 'layer3_features', 'fc_features', 'resnet_features']
 data = scipy.io.loadmat(ROOT_DIR+'/Store/arrays.mat')
 latent_space_features = dict()
