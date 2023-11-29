@@ -2792,8 +2792,8 @@ def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_laten
     for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
         scores=[]
         for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
-            scores.append(euclidean_distance_calculator(image_label_latent_semantic[idx],even_label_weighted_latent_semantics[cmpidx]))
-        output_labels.append(np.argmin(scores))
+            scores.append(cosine_similarity_calculator(image_label_latent_semantic[idx],even_label_weighted_latent_semantics[cmpidx]))
+        output_labels.append(np.argmax(scores))
             
 
     print(output_labels)
@@ -2872,8 +2872,12 @@ def ls_even_by_label(feature_collection, odd_feature_collection, similarity_coll
             print('File path is '+pkl_file_path)
             _,even_label_weighted_latent_semantics = pickle.load(file)
             print('Even LS Pickle File Loaded')
-            
-    
+        # pkl_file_path = ls_file_path+"TASK5_fc_k5_kmeans.csv"  #Change this file path after new pickle file has been created. 
+        # print('File path is '+pkl_file_path)
+        # even_label_weighted_latent_semantics = pd.read_csv(pkl_file_path)
+
+        print('Even LS Pickle File Loaded')
+
     except (FileNotFoundError) as e:
         even_label_weighted_latent_semantics, centroids = generate_label_weighted_semantics(data_even,'RESNET',k,feature_collection, odd_feature_collection, similarity_collection)
         pickle.dump((even_label_weighted_latent_semantics,centroids), open(pkl_file_path, 'wb+'))
