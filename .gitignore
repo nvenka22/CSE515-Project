@@ -32,5 +32,8 @@ Phase3/Classifiers
 MongoTransfer.py
 MongoCounter.py
 .vscode/launch.json
-Store/*
 
+Store/*
+!Store/.gitkeep 
+
+.vscode/settings.json
