@@ -2431,11 +2431,21 @@ def display_scores(confusion_matrix,true_labels,predictions,acc=None):
         conf = pd.DataFrame(data=confusion_matrix, columns=[str(i) for i in range(0, confusion_matrix.shape[1])])
         st.dataframe(conf,width = 200000)
 
-    table = {
-    'Image Index': list(range(1,8677,2)),
-    'True Labels': true_labels,
-    'Predicted Labels': predictions
-    }
+    if acc!=None:
+        labelslist = []
+        for label in true_labels:
+            labelslist.append(get_class_name(label))
+        table = {
+        'Image Index': list(range(1,8677,2)),
+        'True Labels': labelslist,
+        'Predicted Labels': predictions
+        }
+    else:
+        table = {
+        'Image Index': list(range(1,8677,2)),
+        'True Labels': true_labels,
+        'Predicted Labels': predictions
+        }
 
     # Create a DataFrame
     table = pd.DataFrame(table)
@@ -2475,6 +2485,9 @@ def display_scores(confusion_matrix,true_labels,predictions,acc=None):
     st.write("Accuracy Scores:")
     st.write("Overall Accuracy: "+str(accuracy))
     #st.write(confusion_matrix)
+
+    df = pd.DataFrame({label: values for label, values in labelwise_metrics.items()}).T
+    st.dataframe(df)
 
     with st.container():
         for idx in range(101):
@@ -2792,8 +2805,8 @@ def calculate_label_from_semantic(even_label_weighted_latent_semantics,odd_laten
     for idx in tqdm(range(0,image_label_latent_semantic.shape[0])):
         scores=[]
         for cmpidx in range(0,even_label_weighted_latent_semantics.shape[0]):
-            scores.append(euclidean_distance_calculator(image_label_latent_semantic[idx],even_label_weighted_latent_semantics[cmpidx]))
-        output_labels.append(np.argmin(scores))
+            scores.append(cosine_similarity_calculator(image_label_latent_semantic[idx],even_label_weighted_latent_semantics[cmpidx]))
+        output_labels.append(np.argmax(scores))
             
 
     print(output_labels)
@@ -3198,7 +3211,7 @@ class LinearSVC:
 
         return predictions
     
-def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection):
+def relevance_feedback(t,option,query_image,feedback,distances,unique_indices,hash_values,feature_collection,odd_feature_collection,similarity_collection):
 
     mod_path = Path(__file__).parent.parent
     mat_file_path = mod_path.joinpath("LatentSemantics","")
@@ -3296,7 +3309,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
         distances = [np.sqrt(np.sum((avgpoolarray - vector)**2)) for vector in reorder_X_test]
 
-        required_num = 10 - len(nearest_indices)
+        required_num = t - len(nearest_indices)
         print("Required Num: "+str(required_num))
         min_indices = np.argsort(distances)[:required_num]
 
@@ -3326,7 +3339,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
                     if len(nearest_indices)<10:
                                 nearest_indices.append(index)
 
-            required_num = 10 - len(nearest_indices)
+            required_num = t - len(nearest_indices)
             print("Required Num: "+str(required_num))
             min_indices = np.argsort(distances)[:required_num]
 
@@ -3336,7 +3349,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
             print(str(len(nearest_indices))+" after score 2")
 
-            if len(nearest_indices)<10:
+            if len(nearest_indices)<t:
 
                 relevant_indices = {}
 
@@ -3356,7 +3369,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
                                 if len(nearest_indices)<10:
                                     nearest_indices.append(index)
 
-                required_num = 10 - len(nearest_indices)
+                required_num = t - len(nearest_indices)
                 print("Required Num: "+str(required_num))
                 min_indices = np.argsort(distances)[:required_num]
 
@@ -3366,7 +3379,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
                 print(str(len(nearest_indices))+" after score 1")
 
-                if len(nearest_indices)<10:
+                if len(nearest_indices)<t:
 
                     relevant_indices = {}
 
@@ -3383,10 +3396,10 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
 
                     for index in feedback.keys():
                         if feedback[index] == 0:
-                            if len(nearest_indices)<10:
+                            if len(nearest_indices)<t:
                                 nearest_indices.append(index)
 
-                    required_num = 10 - len(nearest_indices)
+                    required_num = t - len(nearest_indices)
                     print("Required Num: "+str(required_num))
                     min_indices = np.argsort(distances)[:required_num]
 
@@ -3441,7 +3454,7 @@ def relevance_feedback(option,query_image,feedback,distances,unique_indices,hash
             if feedback[feedback_index]/3 == 1:
                 nearest_indices.append(feedback_index)
 
-        req = 10 - len(nearest_indices)
+        req = t - len(nearest_indices)
 
         best_indices = np.argsort(y_test)[-req:][::-1]
 

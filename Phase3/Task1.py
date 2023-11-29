@@ -25,7 +25,13 @@ similarity_collection = connect_to_db(dbName,'image_similarities')
 
 if st.button("Run", type="primary"):
     with st.spinner('Calculating...'):
-        with st.container():    
+        with st.container():
+            ft = feature_collection.find_one({'_id':0})
+            sim = similarity_collection.find_one({'_id':0})   
+            for key in feature_collection.find_one({'_id':0}).keys():
+                print("KEY: "+str(key)+" TYPE: "+str(type(ft[key])))
+            for key in sim.keys():
+                print("KEY: "+str(key)+" TYPE: "+str(type(sim[key])))
             ls_even_by_label(feature_collection, odd_feature_collection, similarity_collection,caltech101)
 else:
     st.write("")
